@@ -3,7 +3,10 @@ import type { FC } from "hono/jsx";
 
 type Props = { metricsPath: string; disableConfigApi: boolean };
 
-export const LandingPageScript: FC<Props> = ({ metricsPath, disableConfigApi }) => {
+export const LandingPageScript: FC<Props> = ({
+	metricsPath,
+	disableConfigApi,
+}) => {
 	return html`
 		<script>
 			// Config API disabled flag
@@ -20,7 +23,7 @@ export const LandingPageScript: FC<Props> = ({ metricsPath, disableConfigApi }) 
 				'queryLimit', 'scrapeDelaySeconds', 'timeWindowSeconds', 'metricRefreshIntervalSeconds',
 				'accountListCacheTtlSeconds', 'zoneListCacheTtlSeconds', 'sslCertsCacheTtlSeconds',
 				'logLevel', 'logFormat', 'cfAccounts', 'cfZones', 'cfFreeTierAccounts', 'metricsDenylist',
-				'excludeHost', 'httpStatusGroup'
+				'excludeHost', 'httpStatusGroup', 'hostMetricsAllowlist'
 			];
 
 			// Load config on page load
@@ -73,7 +76,7 @@ export const LandingPageScript: FC<Props> = ({ metricsPath, disableConfigApi }) 
 				});
 
 				// Text fields (non-nullable)
-				['cfFreeTierAccounts', 'metricsDenylist'].forEach(key => {
+				['cfFreeTierAccounts', 'metricsDenylist', 'hostMetricsAllowlist'].forEach(key => {
 					const el = document.getElementById('cfg-' + key);
 					if (el) el.value = localConfig[key] ?? '';
 				});

@@ -442,687 +442,730 @@ export const LandingPage: FC<Props> = ({ config }) => {
 					</div>
 					{/* Runtime Configuration Card */}
 					{!config.disableConfigApi && (
-					<div class="bg-white rounded-2xl border border-gray-200 shadow-sm mb-12 overflow-hidden">
-						{/* Header with Save/Reset buttons */}
-						<div class="flex items-center justify-between p-6 border-b border-gray-100">
-							<div>
-								<h3 class="font-semibold text-gray-900">
-									Runtime Configuration
-								</h3>
-								<p id="config-status" class="text-sm text-gray-500">
-									Loading...
-								</p>
-							</div>
-							<div class="flex gap-2">
-								<button
-									type="button"
-									id="reset-all-btn"
-									onclick="resetAllConfig()"
-									class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-								>
-									Reset All
-								</button>
-								<button
-									type="button"
-									id="save-btn"
-									onclick="saveConfig()"
-									disabled
-									class="px-4 py-2 text-sm bg-[#f6821f] text-white rounded-lg hover:bg-[#e57200] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-								>
-									Save Changes
-								</button>
-							</div>
-						</div>
-
-						{/* Tab Navigation */}
-						<div class="border-b border-gray-200">
-							<div class="flex -mb-px px-6" role="tablist">
-								<button
-									type="button"
-									onclick="switchTab('timing')"
-									class="tab-btn active"
-									data-tab="timing"
-								>
-									Timing
-								</button>
-								<button
-									type="button"
-									onclick="switchTab('cache')"
-									class="tab-btn"
-									data-tab="cache"
-								>
-									Cache
-								</button>
-								<button
-									type="button"
-									onclick="switchTab('filters')"
-									class="tab-btn"
-									data-tab="filters"
-								>
-									Filters
-								</button>
-								<button
-									type="button"
-									onclick="switchTab('output')"
-									class="tab-btn"
-									data-tab="output"
-								>
-									Output
-								</button>
-							</div>
-						</div>
-
-						{/* Tab Panels */}
-						<div class="p-6">
-							{/* Timing Tab */}
-							<div id="tab-timing" class="tab-panel">
-								<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-									<div>
-										<label
-											for="cfg-queryLimit"
-											class="block text-sm font-medium text-gray-700 mb-2"
-										>
-											Query Limit
-										</label>
-										<div class="field-wrapper">
-											<input
-												type="number"
-												id="cfg-queryLimit"
-												class="config-input pr-8"
-												min="1"
-												onchange="onFieldChange('queryLimit', parseInt(this.value))"
-											/>
-											<button
-												type="button"
-												class="field-reset"
-												onclick="resetField('queryLimit')"
-												title="Reset to default"
-											>
-												<svg
-													class="w-4 h-4"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-													aria-hidden="true"
-												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														stroke-width="2"
-														d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-													/>
-												</svg>
-											</button>
-										</div>
-										<p class="text-xs text-gray-500 mt-1">
-											Max results per GraphQL query
-										</p>
-									</div>
-									<div>
-										<label
-											for="cfg-scrapeDelaySeconds"
-											class="block text-sm font-medium text-gray-700 mb-2"
-										>
-											Scrape Delay (seconds)
-										</label>
-										<div class="field-wrapper">
-											<input
-												type="number"
-												id="cfg-scrapeDelaySeconds"
-												class="config-input pr-8"
-												min="0"
-												onchange="onFieldChange('scrapeDelaySeconds', parseInt(this.value))"
-											/>
-											<button
-												type="button"
-												class="field-reset"
-												onclick="resetField('scrapeDelaySeconds')"
-												title="Reset to default"
-											>
-												<svg
-													class="w-4 h-4"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-													aria-hidden="true"
-												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														stroke-width="2"
-														d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-													/>
-												</svg>
-											</button>
-										</div>
-										<p class="text-xs text-gray-500 mt-1">
-											Delay before fetching metrics
-										</p>
-									</div>
-									<div>
-										<label
-											for="cfg-timeWindowSeconds"
-											class="block text-sm font-medium text-gray-700 mb-2"
-										>
-											Time Window (seconds)
-										</label>
-										<div class="field-wrapper">
-											<input
-												type="number"
-												id="cfg-timeWindowSeconds"
-												class="config-input pr-8"
-												min="1"
-												onchange="onFieldChange('timeWindowSeconds', parseInt(this.value))"
-											/>
-											<button
-												type="button"
-												class="field-reset"
-												onclick="resetField('timeWindowSeconds')"
-												title="Reset to default"
-											>
-												<svg
-													class="w-4 h-4"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-													aria-hidden="true"
-												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														stroke-width="2"
-														d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-													/>
-												</svg>
-											</button>
-										</div>
-										<p class="text-xs text-gray-500 mt-1">Query time window</p>
-									</div>
-									<div>
-										<label
-											for="cfg-metricRefreshIntervalSeconds"
-											class="block text-sm font-medium text-gray-700 mb-2"
-										>
-											Refresh Interval (seconds)
-										</label>
-										<div class="field-wrapper">
-											<input
-												type="number"
-												id="cfg-metricRefreshIntervalSeconds"
-												class="config-input pr-8"
-												min="1"
-												onchange="onFieldChange('metricRefreshIntervalSeconds', parseInt(this.value))"
-											/>
-											<button
-												type="button"
-												class="field-reset"
-												onclick="resetField('metricRefreshIntervalSeconds')"
-												title="Reset to default"
-											>
-												<svg
-													class="w-4 h-4"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-													aria-hidden="true"
-												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														stroke-width="2"
-														d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-													/>
-												</svg>
-											</button>
-										</div>
-										<p class="text-xs text-gray-500 mt-1">
-											Background refresh interval
-										</p>
-									</div>
+						<div class="bg-white rounded-2xl border border-gray-200 shadow-sm mb-12 overflow-hidden">
+							{/* Header with Save/Reset buttons */}
+							<div class="flex items-center justify-between p-6 border-b border-gray-100">
+								<div>
+									<h3 class="font-semibold text-gray-900">
+										Runtime Configuration
+									</h3>
+									<p id="config-status" class="text-sm text-gray-500">
+										Loading...
+									</p>
+								</div>
+								<div class="flex gap-2">
+									<button
+										type="button"
+										id="reset-all-btn"
+										onclick="resetAllConfig()"
+										class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										Reset All
+									</button>
+									<button
+										type="button"
+										id="save-btn"
+										onclick="saveConfig()"
+										disabled
+										class="px-4 py-2 text-sm bg-[#f6821f] text-white rounded-lg hover:bg-[#e57200] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+									>
+										Save Changes
+									</button>
 								</div>
 							</div>
 
-							{/* Cache Tab */}
-							<div id="tab-cache" class="tab-panel hidden">
-								<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-									<div>
-										<label
-											for="cfg-accountListCacheTtlSeconds"
-											class="block text-sm font-medium text-gray-700 mb-2"
-										>
-											Account List TTL (seconds)
-										</label>
-										<div class="field-wrapper">
-											<input
-												type="number"
-												id="cfg-accountListCacheTtlSeconds"
-												class="config-input pr-8"
-												min="0"
-												onchange="onFieldChange('accountListCacheTtlSeconds', parseInt(this.value))"
-											/>
-											<button
-												type="button"
-												class="field-reset"
-												onclick="resetField('accountListCacheTtlSeconds')"
-												title="Reset to default"
-											>
-												<svg
-													class="w-4 h-4"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-													aria-hidden="true"
-												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														stroke-width="2"
-														d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-													/>
-												</svg>
-											</button>
-										</div>
-									</div>
-									<div>
-										<label
-											for="cfg-zoneListCacheTtlSeconds"
-											class="block text-sm font-medium text-gray-700 mb-2"
-										>
-											Zone List TTL (seconds)
-										</label>
-										<div class="field-wrapper">
-											<input
-												type="number"
-												id="cfg-zoneListCacheTtlSeconds"
-												class="config-input pr-8"
-												min="0"
-												onchange="onFieldChange('zoneListCacheTtlSeconds', parseInt(this.value))"
-											/>
-											<button
-												type="button"
-												class="field-reset"
-												onclick="resetField('zoneListCacheTtlSeconds')"
-												title="Reset to default"
-											>
-												<svg
-													class="w-4 h-4"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-													aria-hidden="true"
-												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														stroke-width="2"
-														d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-													/>
-												</svg>
-											</button>
-										</div>
-									</div>
-									<div>
-										<label
-											for="cfg-sslCertsCacheTtlSeconds"
-											class="block text-sm font-medium text-gray-700 mb-2"
-										>
-											SSL Certs TTL (seconds)
-										</label>
-										<div class="field-wrapper">
-											<input
-												type="number"
-												id="cfg-sslCertsCacheTtlSeconds"
-												class="config-input pr-8"
-												min="0"
-												onchange="onFieldChange('sslCertsCacheTtlSeconds', parseInt(this.value))"
-											/>
-											<button
-												type="button"
-												class="field-reset"
-												onclick="resetField('sslCertsCacheTtlSeconds')"
-												title="Reset to default"
-											>
-												<svg
-													class="w-4 h-4"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-													aria-hidden="true"
-												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														stroke-width="2"
-														d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-													/>
-												</svg>
-											</button>
-										</div>
-									</div>
+							{/* Tab Navigation */}
+							<div class="border-b border-gray-200">
+								<div class="flex -mb-px px-6" role="tablist">
+									<button
+										type="button"
+										onclick="switchTab('timing')"
+										class="tab-btn active"
+										data-tab="timing"
+									>
+										Timing
+									</button>
+									<button
+										type="button"
+										onclick="switchTab('cache')"
+										class="tab-btn"
+										data-tab="cache"
+									>
+										Cache
+									</button>
+									<button
+										type="button"
+										onclick="switchTab('filters')"
+										class="tab-btn"
+										data-tab="filters"
+									>
+										Filters
+									</button>
+									<button
+										type="button"
+										onclick="switchTab('output')"
+										class="tab-btn"
+										data-tab="output"
+									>
+										Output
+									</button>
 								</div>
 							</div>
 
-							{/* Filters Tab */}
-							<div id="tab-filters" class="tab-panel hidden">
-								<div class="space-y-6">
-									<div>
-										<div class="flex items-center justify-between mb-2">
+							{/* Tab Panels */}
+							<div class="p-6">
+								{/* Timing Tab */}
+								<div id="tab-timing" class="tab-panel">
+									<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+										<div>
 											<label
-												for="cfg-cfAccounts"
-												class="block text-sm font-medium text-gray-700"
+												for="cfg-queryLimit"
+												class="block text-sm font-medium text-gray-700 mb-2"
 											>
-												Accounts Filter
+												Query Limit
 											</label>
-											<label class="flex items-center gap-2 text-sm text-gray-600">
+											<div class="field-wrapper">
 												<input
-													type="checkbox"
-													id="cfg-cfAccounts-all"
-													class="rounded border-gray-300 text-[#f6821f] focus:ring-[#f6821f]"
-													onchange="toggleAllFilter('cfAccounts', this.checked)"
+													type="number"
+													id="cfg-queryLimit"
+													class="config-input pr-8"
+													min="1"
+													onchange="onFieldChange('queryLimit', parseInt(this.value))"
 												/>
-												All accounts
-											</label>
-										</div>
-										<div class="field-wrapper">
-											<input
-												type="text"
-												id="cfg-cfAccounts"
-												class="config-input pr-8"
-												placeholder="account-id-1, account-id-2"
-												onchange="onFieldChange('cfAccounts', this.value || null)"
-											/>
-											<button
-												type="button"
-												class="field-reset"
-												onclick="resetField('cfAccounts')"
-												title="Reset to default"
-											>
-												<svg
-													class="w-4 h-4"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-													aria-hidden="true"
+												<button
+													type="button"
+													class="field-reset"
+													onclick="resetField('queryLimit')"
+													title="Reset to default"
 												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														stroke-width="2"
-														d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-													/>
-												</svg>
-											</button>
+													<svg
+														class="w-4 h-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+														aria-hidden="true"
+													>
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+														/>
+													</svg>
+												</button>
+											</div>
+											<p class="text-xs text-gray-500 mt-1">
+												Max results per GraphQL query
+											</p>
 										</div>
-										<p class="text-xs text-gray-500 mt-1">
-											Comma-separated account IDs (empty = all)
-										</p>
-									</div>
-									<div>
-										<div class="flex items-center justify-between mb-2">
+										<div>
 											<label
-												for="cfg-cfZones"
-												class="block text-sm font-medium text-gray-700"
+												for="cfg-scrapeDelaySeconds"
+												class="block text-sm font-medium text-gray-700 mb-2"
 											>
-												Zones Filter
+												Scrape Delay (seconds)
 											</label>
-											<label class="flex items-center gap-2 text-sm text-gray-600">
+											<div class="field-wrapper">
 												<input
-													type="checkbox"
-													id="cfg-cfZones-all"
-													class="rounded border-gray-300 text-[#f6821f] focus:ring-[#f6821f]"
-													onchange="toggleAllFilter('cfZones', this.checked)"
+													type="number"
+													id="cfg-scrapeDelaySeconds"
+													class="config-input pr-8"
+													min="0"
+													onchange="onFieldChange('scrapeDelaySeconds', parseInt(this.value))"
 												/>
-												All zones
+												<button
+													type="button"
+													class="field-reset"
+													onclick="resetField('scrapeDelaySeconds')"
+													title="Reset to default"
+												>
+													<svg
+														class="w-4 h-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+														aria-hidden="true"
+													>
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+														/>
+													</svg>
+												</button>
+											</div>
+											<p class="text-xs text-gray-500 mt-1">
+												Delay before fetching metrics
+											</p>
+										</div>
+										<div>
+											<label
+												for="cfg-timeWindowSeconds"
+												class="block text-sm font-medium text-gray-700 mb-2"
+											>
+												Time Window (seconds)
 											</label>
-										</div>
-										<div class="field-wrapper">
-											<input
-												type="text"
-												id="cfg-cfZones"
-												class="config-input pr-8"
-												placeholder="zone-id-1, zone-id-2"
-												onchange="onFieldChange('cfZones', this.value || null)"
-											/>
-											<button
-												type="button"
-												class="field-reset"
-												onclick="resetField('cfZones')"
-												title="Reset to default"
-											>
-												<svg
-													class="w-4 h-4"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-													aria-hidden="true"
+											<div class="field-wrapper">
+												<input
+													type="number"
+													id="cfg-timeWindowSeconds"
+													class="config-input pr-8"
+													min="1"
+													onchange="onFieldChange('timeWindowSeconds', parseInt(this.value))"
+												/>
+												<button
+													type="button"
+													class="field-reset"
+													onclick="resetField('timeWindowSeconds')"
+													title="Reset to default"
 												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														stroke-width="2"
-														d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-													/>
-												</svg>
-											</button>
+													<svg
+														class="w-4 h-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+														aria-hidden="true"
+													>
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+														/>
+													</svg>
+												</button>
+											</div>
+											<p class="text-xs text-gray-500 mt-1">
+												Query time window
+											</p>
 										</div>
-										<p class="text-xs text-gray-500 mt-1">
-											Comma-separated zone IDs (empty = all)
-										</p>
-									</div>
-									<div>
-										<label
-											for="cfg-cfFreeTierAccounts"
-											class="block text-sm font-medium text-gray-700 mb-2"
-										>
-											Free Tier Accounts
-										</label>
-										<div class="field-wrapper">
-											<input
-												type="text"
-												id="cfg-cfFreeTierAccounts"
-												class="config-input pr-8"
-												placeholder="account-id-1, account-id-2"
-												onchange="onFieldChange('cfFreeTierAccounts', this.value)"
-											/>
-											<button
-												type="button"
-												class="field-reset"
-												onclick="resetField('cfFreeTierAccounts')"
-												title="Reset to default"
+										<div>
+											<label
+												for="cfg-metricRefreshIntervalSeconds"
+												class="block text-sm font-medium text-gray-700 mb-2"
 											>
-												<svg
-													class="w-4 h-4"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-													aria-hidden="true"
+												Refresh Interval (seconds)
+											</label>
+											<div class="field-wrapper">
+												<input
+													type="number"
+													id="cfg-metricRefreshIntervalSeconds"
+													class="config-input pr-8"
+													min="1"
+													onchange="onFieldChange('metricRefreshIntervalSeconds', parseInt(this.value))"
+												/>
+												<button
+													type="button"
+													class="field-reset"
+													onclick="resetField('metricRefreshIntervalSeconds')"
+													title="Reset to default"
 												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														stroke-width="2"
-														d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-													/>
-												</svg>
-											</button>
+													<svg
+														class="w-4 h-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+														aria-hidden="true"
+													>
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+														/>
+													</svg>
+												</button>
+											</div>
+											<p class="text-xs text-gray-500 mt-1">
+												Background refresh interval
+											</p>
 										</div>
-										<p class="text-xs text-gray-500 mt-1">
-											Accounts using free tier (skips paid-tier metrics)
-										</p>
-									</div>
-									<div>
-										<label
-											for="cfg-metricsDenylist"
-											class="block text-sm font-medium text-gray-700 mb-2"
-										>
-											Metrics Denylist
-										</label>
-										<div class="field-wrapper">
-											<input
-												type="text"
-												id="cfg-metricsDenylist"
-												class="config-input pr-8"
-												placeholder="metric_name_1, metric_name_2"
-												onchange="onFieldChange('metricsDenylist', this.value)"
-											/>
-											<button
-												type="button"
-												class="field-reset"
-												onclick="resetField('metricsDenylist')"
-												title="Reset to default"
-											>
-												<svg
-													class="w-4 h-4"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-													aria-hidden="true"
-												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														stroke-width="2"
-														d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-													/>
-												</svg>
-											</button>
-										</div>
-										<p class="text-xs text-gray-500 mt-1">
-											Metrics to exclude from output
-										</p>
 									</div>
 								</div>
-							</div>
 
-							{/* Output Tab */}
-							<div id="tab-output" class="tab-panel hidden">
-								<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-									<div>
-										<label
-											for="cfg-logLevel"
-											class="block text-sm font-medium text-gray-700 mb-2"
-										>
-											Log Level
-										</label>
-										<div class="field-wrapper">
-											<select
-												id="cfg-logLevel"
-												class="config-input pr-8"
-												onchange="onFieldChange('logLevel', this.value)"
+								{/* Cache Tab */}
+								<div id="tab-cache" class="tab-panel hidden">
+									<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+										<div>
+											<label
+												for="cfg-accountListCacheTtlSeconds"
+												class="block text-sm font-medium text-gray-700 mb-2"
 											>
-												<option value="debug">Debug</option>
-												<option value="info">Info</option>
-												<option value="warn">Warning</option>
-												<option value="error">Error</option>
-											</select>
-											<button
-												type="button"
-												class="field-reset"
-												onclick="resetField('logLevel')"
-												title="Reset to default"
-											>
-												<svg
-													class="w-4 h-4"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-													aria-hidden="true"
+												Account List TTL (seconds)
+											</label>
+											<div class="field-wrapper">
+												<input
+													type="number"
+													id="cfg-accountListCacheTtlSeconds"
+													class="config-input pr-8"
+													min="0"
+													onchange="onFieldChange('accountListCacheTtlSeconds', parseInt(this.value))"
+												/>
+												<button
+													type="button"
+													class="field-reset"
+													onclick="resetField('accountListCacheTtlSeconds')"
+													title="Reset to default"
 												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														stroke-width="2"
-														d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-													/>
-												</svg>
-											</button>
+													<svg
+														class="w-4 h-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+														aria-hidden="true"
+													>
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+														/>
+													</svg>
+												</button>
+											</div>
 										</div>
-									</div>
-									<div>
-										<label
-											for="cfg-logFormat"
-											class="block text-sm font-medium text-gray-700 mb-2"
-										>
-											Log Format
-										</label>
-										<div class="field-wrapper">
-											<select
-												id="cfg-logFormat"
-												class="config-input pr-8"
-												onchange="onFieldChange('logFormat', this.value)"
+										<div>
+											<label
+												for="cfg-zoneListCacheTtlSeconds"
+												class="block text-sm font-medium text-gray-700 mb-2"
 											>
-												<option value="json">JSON</option>
-												<option value="pretty">Pretty</option>
-											</select>
-											<button
-												type="button"
-												class="field-reset"
-												onclick="resetField('logFormat')"
-												title="Reset to default"
-											>
-												<svg
-													class="w-4 h-4"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-													aria-hidden="true"
+												Zone List TTL (seconds)
+											</label>
+											<div class="field-wrapper">
+												<input
+													type="number"
+													id="cfg-zoneListCacheTtlSeconds"
+													class="config-input pr-8"
+													min="0"
+													onchange="onFieldChange('zoneListCacheTtlSeconds', parseInt(this.value))"
+												/>
+												<button
+													type="button"
+													class="field-reset"
+													onclick="resetField('zoneListCacheTtlSeconds')"
+													title="Reset to default"
 												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														stroke-width="2"
-														d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+													<svg
+														class="w-4 h-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+														aria-hidden="true"
+													>
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+														/>
+													</svg>
+												</button>
+											</div>
+										</div>
+										<div>
+											<label
+												for="cfg-sslCertsCacheTtlSeconds"
+												class="block text-sm font-medium text-gray-700 mb-2"
+											>
+												SSL Certs TTL (seconds)
+											</label>
+											<div class="field-wrapper">
+												<input
+													type="number"
+													id="cfg-sslCertsCacheTtlSeconds"
+													class="config-input pr-8"
+													min="0"
+													onchange="onFieldChange('sslCertsCacheTtlSeconds', parseInt(this.value))"
+												/>
+												<button
+													type="button"
+													class="field-reset"
+													onclick="resetField('sslCertsCacheTtlSeconds')"
+													title="Reset to default"
+												>
+													<svg
+														class="w-4 h-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+														aria-hidden="true"
+													>
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+														/>
+													</svg>
+												</button>
+											</div>
+										</div>
+									</div>
+								</div>
+
+								{/* Filters Tab */}
+								<div id="tab-filters" class="tab-panel hidden">
+									<div class="space-y-6">
+										<div>
+											<div class="flex items-center justify-between mb-2">
+												<label
+													for="cfg-cfAccounts"
+													class="block text-sm font-medium text-gray-700"
+												>
+													Accounts Filter
+												</label>
+												<label class="flex items-center gap-2 text-sm text-gray-600">
+													<input
+														type="checkbox"
+														id="cfg-cfAccounts-all"
+														class="rounded border-gray-300 text-[#f6821f] focus:ring-[#f6821f]"
+														onchange="toggleAllFilter('cfAccounts', this.checked)"
 													/>
-												</svg>
-											</button>
+													All accounts
+												</label>
+											</div>
+											<div class="field-wrapper">
+												<input
+													type="text"
+													id="cfg-cfAccounts"
+													class="config-input pr-8"
+													placeholder="account-id-1, account-id-2"
+													onchange="onFieldChange('cfAccounts', this.value || null)"
+												/>
+												<button
+													type="button"
+													class="field-reset"
+													onclick="resetField('cfAccounts')"
+													title="Reset to default"
+												>
+													<svg
+														class="w-4 h-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+														aria-hidden="true"
+													>
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+														/>
+													</svg>
+												</button>
+											</div>
+											<p class="text-xs text-gray-500 mt-1">
+												Comma-separated account IDs (empty = all)
+											</p>
+										</div>
+										<div>
+											<div class="flex items-center justify-between mb-2">
+												<label
+													for="cfg-cfZones"
+													class="block text-sm font-medium text-gray-700"
+												>
+													Zones Filter
+												</label>
+												<label class="flex items-center gap-2 text-sm text-gray-600">
+													<input
+														type="checkbox"
+														id="cfg-cfZones-all"
+														class="rounded border-gray-300 text-[#f6821f] focus:ring-[#f6821f]"
+														onchange="toggleAllFilter('cfZones', this.checked)"
+													/>
+													All zones
+												</label>
+											</div>
+											<div class="field-wrapper">
+												<input
+													type="text"
+													id="cfg-cfZones"
+													class="config-input pr-8"
+													placeholder="zone-id-1, zone-id-2"
+													onchange="onFieldChange('cfZones', this.value || null)"
+												/>
+												<button
+													type="button"
+													class="field-reset"
+													onclick="resetField('cfZones')"
+													title="Reset to default"
+												>
+													<svg
+														class="w-4 h-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+														aria-hidden="true"
+													>
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+														/>
+													</svg>
+												</button>
+											</div>
+											<p class="text-xs text-gray-500 mt-1">
+												Comma-separated zone IDs (empty = all)
+											</p>
+										</div>
+										<div>
+											<label
+												for="cfg-cfFreeTierAccounts"
+												class="block text-sm font-medium text-gray-700 mb-2"
+											>
+												Free Tier Accounts
+											</label>
+											<div class="field-wrapper">
+												<input
+													type="text"
+													id="cfg-cfFreeTierAccounts"
+													class="config-input pr-8"
+													placeholder="account-id-1, account-id-2"
+													onchange="onFieldChange('cfFreeTierAccounts', this.value)"
+												/>
+												<button
+													type="button"
+													class="field-reset"
+													onclick="resetField('cfFreeTierAccounts')"
+													title="Reset to default"
+												>
+													<svg
+														class="w-4 h-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+														aria-hidden="true"
+													>
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+														/>
+													</svg>
+												</button>
+											</div>
+											<p class="text-xs text-gray-500 mt-1">
+												Accounts using free tier (skips paid-tier metrics)
+											</p>
+										</div>
+										<div>
+											<label
+												for="cfg-metricsDenylist"
+												class="block text-sm font-medium text-gray-700 mb-2"
+											>
+												Metrics Denylist
+											</label>
+											<div class="field-wrapper">
+												<input
+													type="text"
+													id="cfg-metricsDenylist"
+													class="config-input pr-8"
+													placeholder="metric_name_1, metric_name_2"
+													onchange="onFieldChange('metricsDenylist', this.value)"
+												/>
+												<button
+													type="button"
+													class="field-reset"
+													onclick="resetField('metricsDenylist')"
+													title="Reset to default"
+												>
+													<svg
+														class="w-4 h-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+														aria-hidden="true"
+													>
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+														/>
+													</svg>
+												</button>
+											</div>
+											<p class="text-xs text-gray-500 mt-1">
+												Metrics to exclude from output
+											</p>
+										</div>
+										<div>
+											<label
+												for="cfg-hostMetricsAllowlist"
+												class="block text-sm font-medium text-gray-700 mb-2"
+											>
+												Hostname Metrics Allowlist
+											</label>
+											<div class="field-wrapper">
+												<input
+													type="text"
+													id="cfg-hostMetricsAllowlist"
+													class="config-input pr-8"
+													placeholder="api.example.com, www.example.com"
+													onchange="onFieldChange('hostMetricsAllowlist', this.value)"
+												/>
+												<button
+													type="button"
+													class="field-reset"
+													onclick="resetField('hostMetricsAllowlist')"
+													title="Reset to default"
+												>
+													<svg
+														class="w-4 h-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+														aria-hidden="true"
+													>
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+														/>
+													</svg>
+												</button>
+											</div>
+											<p class="text-xs text-gray-500 mt-1">
+												Hostnames for per-host metrics (max 50, empty disables)
+											</p>
 										</div>
 									</div>
-									<div>
-										<label
-											for="cfg-excludeHost"
-											class="block text-sm font-medium text-gray-700 mb-2"
-										>
-											Exclude Host Label
-										</label>
-										<div class="flex items-center justify-between">
-											<p class="text-xs text-gray-500">
-												Remove host labels from metrics
-											</p>
-											<button
-												type="button"
-												id="cfg-excludeHost"
-												class="toggle-switch"
-												onclick="toggleSwitch('excludeHost')"
-												role="switch"
-												aria-checked="false"
-											/>
+								</div>
+
+								{/* Output Tab */}
+								<div id="tab-output" class="tab-panel hidden">
+									<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+										<div>
+											<label
+												for="cfg-logLevel"
+												class="block text-sm font-medium text-gray-700 mb-2"
+											>
+												Log Level
+											</label>
+											<div class="field-wrapper">
+												<select
+													id="cfg-logLevel"
+													class="config-input pr-8"
+													onchange="onFieldChange('logLevel', this.value)"
+												>
+													<option value="debug">Debug</option>
+													<option value="info">Info</option>
+													<option value="warn">Warning</option>
+													<option value="error">Error</option>
+												</select>
+												<button
+													type="button"
+													class="field-reset"
+													onclick="resetField('logLevel')"
+													title="Reset to default"
+												>
+													<svg
+														class="w-4 h-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+														aria-hidden="true"
+													>
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+														/>
+													</svg>
+												</button>
+											</div>
 										</div>
-									</div>
-									<div>
-										<label
-											for="cfg-httpStatusGroup"
-											class="block text-sm font-medium text-gray-700 mb-2"
-										>
-											HTTP Status Grouping
-										</label>
-										<div class="flex items-center justify-between">
-											<p class="text-xs text-gray-500">
-												Group status codes (2xx, 4xx, etc.)
-											</p>
-											<button
-												type="button"
-												id="cfg-httpStatusGroup"
-												class="toggle-switch"
-												onclick="toggleSwitch('httpStatusGroup')"
-												role="switch"
-												aria-checked="false"
-											/>
+										<div>
+											<label
+												for="cfg-logFormat"
+												class="block text-sm font-medium text-gray-700 mb-2"
+											>
+												Log Format
+											</label>
+											<div class="field-wrapper">
+												<select
+													id="cfg-logFormat"
+													class="config-input pr-8"
+													onchange="onFieldChange('logFormat', this.value)"
+												>
+													<option value="json">JSON</option>
+													<option value="pretty">Pretty</option>
+												</select>
+												<button
+													type="button"
+													class="field-reset"
+													onclick="resetField('logFormat')"
+													title="Reset to default"
+												>
+													<svg
+														class="w-4 h-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+														aria-hidden="true"
+													>
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+														/>
+													</svg>
+												</button>
+											</div>
+										</div>
+										<div>
+											<label
+												for="cfg-excludeHost"
+												class="block text-sm font-medium text-gray-700 mb-2"
+											>
+												Exclude Host Label
+											</label>
+											<div class="flex items-center justify-between">
+												<p class="text-xs text-gray-500">
+													Remove host labels from metrics
+												</p>
+												<button
+													type="button"
+													id="cfg-excludeHost"
+													class="toggle-switch"
+													onclick="toggleSwitch('excludeHost')"
+													role="switch"
+													aria-checked="false"
+												/>
+											</div>
+										</div>
+										<div>
+											<label
+												for="cfg-httpStatusGroup"
+												class="block text-sm font-medium text-gray-700 mb-2"
+											>
+												HTTP Status Grouping
+											</label>
+											<div class="flex items-center justify-between">
+												<p class="text-xs text-gray-500">
+													Group status codes (2xx, 4xx, etc.)
+												</p>
+												<button
+													type="button"
+													id="cfg-httpStatusGroup"
+													class="toggle-switch"
+													onclick="toggleSwitch('httpStatusGroup')"
+													role="switch"
+													aria-checked="false"
+												/>
+											</div>
 										</div>
 									</div>
 								</div>
 							</div>
 						</div>
-					</div>
 					)}
 					{/* Toast notification */}
 					<div id="toast" class="toast" /> {/* Live Metrics Section */}
@@ -1187,7 +1230,10 @@ export const LandingPage: FC<Props> = ({ config }) => {
 					</div>
 				</div>
 
-				<LandingPageScript metricsPath={config.metricsPath} disableConfigApi={config.disableConfigApi} />
+				<LandingPageScript
+					metricsPath={config.metricsPath}
+					disableConfigApi={config.disableConfigApi}
+				/>
 			</body>
 		</html>
 	);

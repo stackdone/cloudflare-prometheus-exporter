@@ -27,6 +27,7 @@ import {
 	ColoMetricsQuery,
 	EdgeCountryMetricsQuery,
 	HealthCheckMetricsQuery,
+	HostnameHttpMetricsQuery,
 	HTTPMetricsQuery,
 	HTTPMetricsQueryNoBots,
 	LoadBalancerMetricsQuery,
@@ -754,6 +755,7 @@ export class CloudflareMetricsClient {
 	 * @param zones Zone metadata for label mapping.
 	 * @param firewallRules Map of firewall rule IDs to names.
 	 * @param timeRange Shared time range for query alignment.
+	 * @param hostMetricsAllowlist Allowed hostnames for hostname-http-metrics query.
 	 * @returns Promise of metric definitions for the zones.
 	 * @throws {Error} When unknown query type provided.
 	 */
@@ -763,6 +765,7 @@ export class CloudflareMetricsClient {
 		zones: Zone[],
 		firewallRules: Record<string, string>,
 		timeRange: TimeRange,
+		hostMetricsAllowlist?: ReadonlySet<string>,
 	): Promise<MetricDefinition[]> {
 		this.logger.info("Fetching zone metrics", {
 			query,
@@ -797,6 +800,13 @@ export class CloudflareMetricsClient {
 				return this.getOriginStatusMetrics(zoneIds, zones, timeRange);
 			case "cache-miss-metrics":
 				return this.getCacheMissMetrics(zoneIds, zones, timeRange);
+			case "hostname-http-metrics":
+				return this.getHostnameHttpMetrics(
+					zoneIds,
+					zones,
+					timeRange,
+					hostMetricsAllowlist,
+				);
 			case "ssl-certificates":
 				return this.getSSLCertificateMetrics(zones);
 			case "lb-weight-metrics":
@@ -1794,6 +1804,280 @@ export class CloudflareMetricsClient {
 			healthCheckTtfb,
 			healthCheckTcpConn,
 			healthCheckTlsHandshake,
+		].filter((m) => m.values.length > 0);
+	}
+
+	/**
+	 * Hostname-level HTTP metrics (requests, status, cache, latency) for allowlisted hosts.
+	 * Fetches two windows (1h, 2h) from the shared maxtime anchor.
+	 *
+	 * @param zoneIds Zone IDs to query.
+	 * @param zones Zone metadata for label mapping.
+	 * @param anchor Shared time range providing the maxtime anchor.
+	 * @param allowlist Allowed hostnames; empty/undefined returns no metrics.
+	 * @returns Hostname metrics across both windows.
+	 */
+	private async getHostnameHttpMetrics(
+		zoneIds: string[],
+		zones: Zone[],
+		anchor: TimeRange,
+		allowlist: ReadonlySet<string> | undefined,
+	): Promise<MetricDefinition[]> {
+		if (!allowlist || allowlist.size === 0) {
+			this.logger.debug("Hostname metrics skipped: empty allowlist");
+			return [];
+		}
+
+		const hosts = [...allowlist];
+		const maxtime = anchor.maxtime;
+
+		// Compute 1h and 2h lookback mintimes from the shared maxtime
+		const maxtimeMs = new Date(maxtime).getTime();
+		const mintime1h = new Date(maxtimeMs - 3_600_000).toISOString();
+		const mintime2h = new Date(maxtimeMs - 7_200_000).toISOString();
+
+		const [metrics1h, metrics2h] = await Promise.all([
+			this.getHostnameHttpMetricsWindow(
+				zoneIds,
+				zones,
+				hosts,
+				mintime1h,
+				maxtime,
+				"1h",
+			),
+			this.getHostnameHttpMetricsWindow(
+				zoneIds,
+				zones,
+				hosts,
+				mintime2h,
+				maxtime,
+				"2h",
+			),
+		]);
+
+		// Merge metrics by name: combine values from both windows
+		const byName = new Map<string, MetricDefinition>();
+		for (const m of [...metrics1h, ...metrics2h]) {
+			const existing = byName.get(m.name);
+			if (existing) {
+				existing.values.push(...m.values);
+			} else {
+				byName.set(m.name, { ...m, values: [...m.values] });
+			}
+		}
+
+		// Log allowlisted hosts with no traffic in the 1h window at debug level.
+		// This fires every refresh cycle so must not be warn/info to avoid log spam.
+		const seenHosts = new Set<string>();
+		for (const m of metrics1h) {
+			for (const v of m.values) {
+				const host = v.labels.host;
+				if (host) seenHosts.add(host);
+			}
+		}
+		const missingHosts = hosts.filter((h) => !seenHosts.has(h));
+		if (missingHosts.length > 0) {
+			const MAX_LOGGED = 20;
+			const preview = missingHosts.slice(0, MAX_LOGGED);
+			this.logger.debug("Allowlisted hosts with no traffic in 1h window", {
+				missing_count: missingHosts.length,
+				missing_hosts: preview,
+				truncated: missingHosts.length > MAX_LOGGED,
+			});
+		}
+
+		return [...byName.values()];
+	}
+
+	/**
+	 * Fetches hostname metrics for a single time window.
+	 *
+	 * @param zoneIds Zone IDs to query.
+	 * @param zones Zone metadata for label mapping.
+	 * @param hosts Allowlisted hostnames.
+	 * @param mintime Start of window (ISO string).
+	 * @param maxtime End of window (ISO string).
+	 * @param windowLabel Window label for metric labels ("1h" or "2h").
+	 * @returns Hostname metrics for the window.
+	 */
+	private async getHostnameHttpMetricsWindow(
+		zoneIds: string[],
+		zones: Zone[],
+		hosts: readonly string[],
+		mintime: string,
+		maxtime: string,
+		windowLabel: "1h" | "2h",
+	): Promise<MetricDefinition[]> {
+		const result = await this.gql.query(HostnameHttpMetricsQuery, {
+			zoneIDs: zoneIds,
+			mintime,
+			maxtime,
+			limit: this.config.queryLimit,
+			hosts: [...hosts],
+		});
+
+		if (result.error) {
+			throw new GraphQLError(
+				`Failed to fetch hostname metrics (${windowLabel})`,
+				result.error.graphQLErrors ?? [],
+				{ context: { zone_count: zoneIds.length, window: windowLabel } },
+			);
+		}
+
+		const hostnameRequests: MetricDefinition = {
+			name: "cloudflare_zone_hostname_requests",
+			help: "Total requests per hostname in lookback window (gauge snapshot, see window label)",
+			type: "gauge",
+			values: [],
+		};
+		const hostnameStatus: MetricDefinition = {
+			name: "cloudflare_zone_hostname_requests_by_status",
+			help: "Requests per hostname by edge response status in lookback window",
+			type: "gauge",
+			values: [],
+		};
+		const hostnameCacheStatus: MetricDefinition = {
+			name: "cloudflare_zone_hostname_cache_status",
+			help: "Requests per hostname by cache status in lookback window",
+			type: "gauge",
+			values: [],
+		};
+		const hostnameEdgeTtfb: MetricDefinition = {
+			name: "cloudflare_zone_hostname_edge_ttfb_seconds",
+			help: "Edge time to first byte per hostname in seconds (quantile over lookback window)",
+			type: "gauge",
+			values: [],
+		};
+		const hostnameOriginDuration: MetricDefinition = {
+			name: "cloudflare_zone_hostname_origin_response_duration_seconds",
+			help: "Origin response duration per hostname in seconds (quantile over lookback window)",
+			type: "gauge",
+			values: [],
+		};
+
+		for (const zoneData of result.data?.viewer?.zones ?? []) {
+			const zoneName = findZoneName(zoneData.zoneTag, zones);
+
+			// Total requests per host
+			for (const group of zoneData.hostRequests ?? []) {
+				const host = (
+					group.dimensions?.clientRequestHTTPHost ?? ""
+				).toLowerCase();
+				const count = group.count ?? 0;
+				if (count > 0) {
+					hostnameRequests.values.push({
+						labels: { zone: zoneName, host, window: windowLabel },
+						value: count,
+					});
+				}
+			}
+
+			// Requests by status per host
+			for (const group of zoneData.hostStatus ?? []) {
+				const host = (
+					group.dimensions?.clientRequestHTTPHost ?? ""
+				).toLowerCase();
+				const status = group.dimensions?.edgeResponseStatus ?? 0;
+				const count = group.count ?? 0;
+				if (count > 0) {
+					hostnameStatus.values.push({
+						labels: {
+							zone: zoneName,
+							host,
+							status: String(status),
+							window: windowLabel,
+						},
+						value: count,
+					});
+				}
+			}
+
+			// Requests by cache status per host
+			for (const group of zoneData.hostCache ?? []) {
+				const host = (
+					group.dimensions?.clientRequestHTTPHost ?? ""
+				).toLowerCase();
+				const cacheStatus = group.dimensions?.cacheStatus ?? "";
+				const count = group.count ?? 0;
+				if (count > 0) {
+					hostnameCacheStatus.values.push({
+						labels: {
+							zone: zoneName,
+							host,
+							cache_status: cacheStatus,
+							window: windowLabel,
+						},
+						value: count,
+					});
+				}
+			}
+
+			// Latency quantiles per host
+			for (const group of zoneData.hostLatency ?? []) {
+				const host = (
+					group.dimensions?.clientRequestHTTPHost ?? ""
+				).toLowerCase();
+				const q = group.quantiles;
+				if (!q) continue;
+
+				const baseLabels = { zone: zoneName, host, window: windowLabel };
+
+				// Edge TTFB (ms → seconds)
+				if (q.edgeTimeToFirstByteMsP50 != null) {
+					hostnameEdgeTtfb.values.push({
+						labels: { ...baseLabels, quantile: "P50" },
+						value: q.edgeTimeToFirstByteMsP50 / 1000,
+					});
+				}
+				if (q.edgeTimeToFirstByteMsP95 != null) {
+					hostnameEdgeTtfb.values.push({
+						labels: { ...baseLabels, quantile: "P95" },
+						value: q.edgeTimeToFirstByteMsP95 / 1000,
+					});
+				}
+
+				// Origin response duration (ms → seconds)
+				if (q.originResponseDurationMsP50 != null) {
+					hostnameOriginDuration.values.push({
+						labels: { ...baseLabels, quantile: "P50" },
+						value: q.originResponseDurationMsP50 / 1000,
+					});
+				}
+				if (q.originResponseDurationMsP95 != null) {
+					hostnameOriginDuration.values.push({
+						labels: { ...baseLabels, quantile: "P95" },
+						value: q.originResponseDurationMsP95 / 1000,
+					});
+				}
+			}
+
+			// Warn if any alias hit the query limit (results may be truncated)
+			const limit = this.config.queryLimit;
+			const aliases = [
+				{ name: "hostRequests", len: zoneData.hostRequests?.length ?? 0 },
+				{ name: "hostStatus", len: zoneData.hostStatus?.length ?? 0 },
+				{ name: "hostCache", len: zoneData.hostCache?.length ?? 0 },
+				{ name: "hostLatency", len: zoneData.hostLatency?.length ?? 0 },
+			];
+			for (const alias of aliases) {
+				if (alias.len >= limit) {
+					this.logger.warn("Hostname metrics may be truncated", {
+						zone: zoneName,
+						alias: alias.name,
+						returned: alias.len,
+						limit,
+						window: windowLabel,
+					});
+				}
+			}
+		}
+
+		return [
+			hostnameRequests,
+			hostnameStatus,
+			hostnameCacheStatus,
+			hostnameEdgeTtfb,
+			hostnameOriginDuration,
 		].filter((m) => m.values.length > 0);
 	}
 

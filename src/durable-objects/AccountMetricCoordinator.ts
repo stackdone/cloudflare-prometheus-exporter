@@ -27,6 +27,33 @@ const ACCOUNT_SCOPED_QUERIES = [
 	),
 ] as const;
 
+/**
+ * Filters account-scoped queries based on account tier and config.
+ * Hostname metrics are excluded when the allowlist is empty or excludeHost is true
+ * to avoid creating idle DOs that would alarm-cycle forever doing nothing.
+ */
+function getActiveAccountQueries(
+	config: ResolvedConfig,
+	isFreeTierAccount: boolean,
+): readonly string[] {
+	const hostnameEnabled =
+		parseCommaSeparated(config.hostMetricsAllowlist).size > 0 &&
+		!config.excludeHost;
+
+	return ACCOUNT_SCOPED_QUERIES.filter((q) => {
+		if (
+			isFreeTierAccount &&
+			!FREE_TIER_QUERIES.includes(q as (typeof FREE_TIER_QUERIES)[number])
+		) {
+			return false;
+		}
+		if (q === "hostname-http-metrics" && !hostnameEnabled) {
+			return false;
+		}
+		return true;
+	});
+}
+
 // Zone-scoped REST queries (one DO per zone for parallelization and fault isolation)
 const ZONE_SCOPED_QUERIES = ["ssl-certificates", "lb-weight-metrics"] as const;
 
@@ -233,12 +260,7 @@ export class AccountMetricCoordinator extends DurableObject<Env> {
 		const cfFreeTierSet = parseCommaSeparated(config.cfFreeTierAccounts);
 		const isFreeTierAccount = cfFreeTierSet.has(state.accountId);
 
-		// Filter queries based on account tier
-		const accountQueries = isFreeTierAccount
-			? ACCOUNT_SCOPED_QUERIES.filter((q) =>
-					FREE_TIER_QUERIES.includes(q as (typeof FREE_TIER_QUERIES)[number]),
-				)
-			: ACCOUNT_SCOPED_QUERIES;
+		const accountQueries = getActiveAccountQueries(config, isFreeTierAccount);
 
 		// Push zone context to account-scoped exporters AND initialize zone-scoped exporters concurrently
 		await Promise.all([
@@ -337,12 +359,7 @@ export class AccountMetricCoordinator extends DurableObject<Env> {
 		const cfFreeTierSet = parseCommaSeparated(config.cfFreeTierAccounts);
 		const isFreeTierAccount = cfFreeTierSet.has(state.accountId);
 
-		// Filter queries based on account tier
-		const accountQueries = isFreeTierAccount
-			? ACCOUNT_SCOPED_QUERIES.filter((q) =>
-					FREE_TIER_QUERIES.includes(q as (typeof FREE_TIER_QUERIES)[number]),
-				)
-			: ACCOUNT_SCOPED_QUERIES;
+		const accountQueries = getActiveAccountQueries(config, isFreeTierAccount);
 
 		// Collect from account-scoped exporters
 		const accountMetricsResults = await Promise.all(

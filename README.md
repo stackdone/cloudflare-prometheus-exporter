@@ -8,7 +8,7 @@ Export Cloudflare metrics to Prometheus. Built on Cloudflare Workers with Durabl
 
 ## Features
 
-- **58 Prometheus metrics** - requests, bandwidth, threats, workers, load balancers, SSL certs, and more
+- **70+ Prometheus metrics** - requests, bandwidth, threats, workers, load balancers, SSL certs, hostname-level analytics, and more
 - **Cloudflare Workers** - serverless edge deployment
 - **Durable Objects** - stateful counter accumulation for proper Prometheus semantics
 - **Background refresh** - alarms fetch data every 60s; scrapes return cached data instantly
@@ -62,6 +62,7 @@ Set in `wrangler.jsonc` or via `wrangler secret put`:
 | `CF_ACCOUNTS` | - | Comma-separated account IDs to include (default: all) |
 | `CF_ZONES` | - | Comma-separated zone IDs to include (default: all) |
 | `CF_FREE_TIER_ACCOUNTS` | - | Comma-separated account IDs using free tier (skips paid-tier metrics) |
+| `HOST_METRICS_ALLOWLIST` | - | Comma-separated hostnames for hostname-level metrics (max 50). Empty disables. Adds 2 extra GraphQL calls per account per refresh cycle. `EXCLUDE_HOST=true` also disables. |
 | `METRICS_PATH` | /metrics | Custom path for metrics endpoint |
 | `BASIC_AUTH_USER` | - | Username for basic auth (secret, default: no auth, requires `BASIC_AUTH_PASSWORD`) |
 | `BASIC_AUTH_PASSWORD` | - | Password for basic auth (secret, default: no auth, requires `BASIC_AUTH_USER`) |
@@ -154,6 +155,7 @@ Override configuration at runtime without redeployment. Overrides persist in KV 
 | `metricsDenylist` | string | Comma-separated metrics to exclude |
 | `excludeHost` | boolean | Exclude host labels |
 | `httpStatusGroup` | boolean | Group HTTP status codes |
+| `hostMetricsAllowlist` | string | Comma-separated hostnames for hostname-level metrics |
 
 ### Examples
 
@@ -314,6 +316,20 @@ curl -X DELETE https://your-worker.workers.dev/config
 | `cloudflare_magic_transit_tunnel_failures` | gauge | account |
 | `cloudflare_magic_transit_edge_colo_count` | gauge | account |
 
+### Hostname Metrics
+
+Requires `HOST_METRICS_ALLOWLIST` to be set (max 50 hostnames). Disabled when `EXCLUDE_HOST=true`.
+
+All hostname metrics are **gauge snapshots** over the lookback window (1h or 2h), not cumulative counters. The `window` label indicates the lookback period. Hosts with zero traffic in a window will not emit series for that window.
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `cloudflare_zone_hostname_requests` | gauge | zone, host, window | Total requests in lookback window |
+| `cloudflare_zone_hostname_requests_by_status` | gauge | zone, host, status, window | Requests by HTTP status code (raw, e.g. 200/404/500) |
+| `cloudflare_zone_hostname_cache_status` | gauge | zone, host, cache_status, window | Requests by cache status (hit/miss/etc.) |
+| `cloudflare_zone_hostname_edge_ttfb_seconds` | gauge | zone, host, quantile, window | Edge TTFB in seconds (P50/P95 quantiles) |
+| `cloudflare_zone_hostname_origin_response_duration_seconds` | gauge | zone, host, quantile, window | Origin response duration in seconds (P50/P95 quantiles) |
+
 ### SSL Certificate Metrics
 
 | Metric | Type | Labels |
@@ -396,16 +412,17 @@ For mixed accounts (enterprise + free zones), only free zones are skipped—paid
 │   ▼            ▼      ▼            ▼      ▼            ▼                       │
 │ ┌─────┐    ┌─────┐  ┌─────┐    ┌─────┐  ┌─────┐    ┌─────┐                     │
 │ │Exprt│    │Exprt│  │Exprt│    │Exprt│  │Exprt│    │Exprt│                     │
-│ │(13) │ .. │(N)  │  │(13) │ .. │(N)  │  │(13) │ .. │(N)  │                     │
+│ │(15) │ .. │(N)  │  │(15) │ .. │(N)  │  │(15) │ .. │(N)  │                     │
 │ │acct │    │zone │  │acct │    │zone │  │acct │    │zone │                     │
 │ └─────┘    └─────┘  └─────┘    └─────┘  └─────┘    └─────┘                     │
 │                                                                                │
 │  MetricExporter DOs (per account):                                             │
-│  - Account-scoped (13): worker-totals, logpush-account, magic-transit,         │
+│  - Account-scoped (15): worker-totals, logpush-account, magic-transit,         │
 │    http-metrics, adaptive-metrics, edge-country-metrics, colo-metrics,         │
 │    colo-error-metrics, request-method-metrics, health-check-metrics,           │
-│    load-balancer-metrics, logpush-zone, origin-status-metrics                  │
-│  - Zone-scoped (N per account, 1 per zone): ssl-certificates                   │
+│    load-balancer-metrics, logpush-zone, origin-status-metrics,                 │
+│    cache-miss-metrics, hostname-http-metrics                                   │
+│  - Zone-scoped (N per account, 1 per zone): ssl-certificates, lb-weight-metrics │
 │                                                                                │
 │  ┌─────────────────────────────────────────────────────────────────────────┐   │
 │  │              CloudflareMetricsClient (per-isolate)                      │   │
@@ -452,7 +469,7 @@ For mixed accounts (enterprise + free zones), only free zones are skipped—paid
   ▼           ▼         ▼           ▼         ▼           ▼
 ┌─────┐   ┌─────┐    ┌─────┐   ┌─────┐    ┌─────┐   ┌─────┐
 │Exprt│...│Exprt│    │Exprt│...│Exprt│    │Exprt│...│Exprt│
-│13+N │   │     │    │13+N │   │     │    │13+N │   │     │
+│15+N │   │     │    │15+N │   │     │    │15+N │   │     │
 │     │   │     │    │     │   │     │    │     │   │     │
 │ ret │   │ ret │    │ ret │   │ ret │    │ ret │   │ ret │
 │cache│   │cache│    │cache│   │cache│    │cache│   │cache│
@@ -513,7 +530,7 @@ For mixed accounts (enterprise + free zones), only free zones are skipped—paid
 │                                                                        │
 │  3. Push context to MetricExporter DOs:                                │
 │     ┌────────────────────────────────────────────────────────────────┐ │
-│     │ Account-scoped (13 exporters):                                 │ │
+│     │ Account-scoped (15 exporters):                                 │ │
 │     │   exporter.updateZoneContext(accountId, accountName, zones)    │ │
 │     │                                                                │ │
 │     │ Zone-scoped (N exporters, 1 per zone):                         │ │
@@ -530,13 +547,13 @@ For mixed accounts (enterprise + free zones), only free zones are skipped—paid
 ┌────────────────────────────────────────────────────────────────────────┐
 │           MetricExporter.refresh() for account-scoped queries          │
 │                                                                        │
-│  Query Types (13 total):                                               │
+│  Query Types (15 total):                                               │
 │  ├── ACCOUNT-LEVEL (single account per query, 3):                      │
 │  │   ├── worker-totals                                                 │
 │  │   ├── logpush-account                                               │
 │  │   └── magic-transit                                                 │
 │  │                                                                     │
-│  └── ZONE-LEVEL (all zones batched in one query, 10):                  │
+│  └── ZONE-LEVEL (all zones batched in one query, 12):                  │
 │      ├── http-metrics                                                  │
 │      ├── adaptive-metrics                                              │
 │      ├── edge-country-metrics                                          │
@@ -546,7 +563,9 @@ For mixed accounts (enterprise + free zones), only free zones are skipped—paid
 │      ├── health-check-metrics                                          │
 │      ├── load-balancer-metrics                                         │
 │      ├── logpush-zone                                                  │
-│      └── origin-status-metrics                                         │
+│      ├── origin-status-metrics                                         │
+│      ├── cache-miss-metrics                                            │
+│      └── hostname-http-metrics                                         │
 │                                                                        │
 │  After fetch: Process counters → Cache metrics → Schedule next alarm   │
 │  Jitter: 1-5s fixed (tighter clustering for time range alignment)      │

@@ -606,6 +606,85 @@ export const OriginStatusMetricsQuery = graphql(`
   }
 `);
 
+export const HostnameHttpMetricsQuery = graphql(`
+  query HostnameHttpMetrics(
+    $zoneIDs: [string!]
+    $mintime: Time!
+    $maxtime: Time!
+    $limit: uint64!
+    $hosts: [string!]
+  ) {
+    viewer {
+      zones(filter: { zoneTag_in: $zoneIDs }) {
+        zoneTag
+
+        hostRequests: httpRequestsAdaptiveGroups(
+          limit: $limit
+          filter: {
+            datetime_geq: $mintime
+            datetime_lt: $maxtime
+            clientRequestHTTPHost_in: $hosts
+          }
+        ) {
+          count
+          dimensions {
+            clientRequestHTTPHost
+          }
+        }
+
+        hostStatus: httpRequestsAdaptiveGroups(
+          limit: $limit
+          filter: {
+            datetime_geq: $mintime
+            datetime_lt: $maxtime
+            clientRequestHTTPHost_in: $hosts
+          }
+        ) {
+          count
+          dimensions {
+            clientRequestHTTPHost
+            edgeResponseStatus
+          }
+        }
+
+        hostCache: httpRequestsAdaptiveGroups(
+          limit: $limit
+          filter: {
+            datetime_geq: $mintime
+            datetime_lt: $maxtime
+            clientRequestHTTPHost_in: $hosts
+          }
+        ) {
+          count
+          dimensions {
+            clientRequestHTTPHost
+            cacheStatus
+          }
+        }
+
+        hostLatency: httpRequestsAdaptiveGroups(
+          limit: $limit
+          filter: {
+            datetime_geq: $mintime
+            datetime_lt: $maxtime
+            clientRequestHTTPHost_in: $hosts
+          }
+        ) {
+          dimensions {
+            clientRequestHTTPHost
+          }
+          quantiles {
+            edgeTimeToFirstByteMsP50
+            edgeTimeToFirstByteMsP95
+            originResponseDurationMsP50
+            originResponseDurationMsP95
+          }
+        }
+      }
+    }
+  }
+`);
+
 export const CacheMissMetricsQuery = graphql(`
   query CacheMissMetrics(
     $zoneIDs: [string!]

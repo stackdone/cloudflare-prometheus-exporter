@@ -85,6 +85,8 @@ src/
 
 **Counter accumulation:** Cloudflare returns window totals; DOs accumulate for Prometheus monotonic semantics
 
+**Hostname metrics:** Allowlist-based (`HOST_METRICS_ALLOWLIST`, max 50). All gauges (window snapshots). 1h + 2h lookback via `HostnameHttpMetricsQuery`. Hosts normalized to lowercase. Disabled when allowlist empty or `excludeHost=true`.
+
 ## COMMANDS
 
 ```bash

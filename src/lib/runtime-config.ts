@@ -28,6 +28,8 @@ export const ConfigKeySchema = z.enum([
 	// Output options
 	"excludeHost",
 	"httpStatusGroup",
+	// Hostname metrics
+	"hostMetricsAllowlist",
 ]);
 
 /**
@@ -55,6 +57,7 @@ const ConfigValueSchemas = {
 	metricsDenylist: z.string(),
 	excludeHost: z.boolean(),
 	httpStatusGroup: z.boolean(),
+	hostMetricsAllowlist: z.string(),
 } as const;
 
 /**
@@ -83,6 +86,7 @@ export const ConfigOverridesSchema = z
 		metricsDenylist: ConfigValueSchemas.metricsDenylist.optional(),
 		excludeHost: ConfigValueSchemas.excludeHost.optional(),
 		httpStatusGroup: ConfigValueSchemas.httpStatusGroup.optional(),
+		hostMetricsAllowlist: ConfigValueSchemas.hostMetricsAllowlist.optional(),
 	})
 	.readonly();
 
@@ -113,6 +117,7 @@ export const ResolvedConfigSchema = z
 		metricsDenylist: ConfigValueSchemas.metricsDenylist,
 		excludeHost: ConfigValueSchemas.excludeHost,
 		httpStatusGroup: ConfigValueSchemas.httpStatusGroup,
+		hostMetricsAllowlist: ConfigValueSchemas.hostMetricsAllowlist,
 	})
 	.readonly();
 
@@ -130,6 +135,7 @@ type OptionalEnvVars = {
 	CF_ZONES?: string;
 	CF_FREE_TIER_ACCOUNTS?: string;
 	HEALTH_CHECK_CACHE_TTL_SECONDS?: string;
+	HOST_METRICS_ALLOWLIST?: string;
 };
 
 /**
@@ -184,6 +190,7 @@ export function getEnvDefaults(env: Env): ResolvedConfig {
 			.boolean()
 			.catch(false)
 			.parse(env.CF_HTTP_STATUS_GROUP),
+		hostMetricsAllowlist: optionalEnv.HOST_METRICS_ALLOWLIST?.trim() ?? "",
 	};
 }
 
@@ -269,6 +276,8 @@ function mergeConfig(
 		metricsDenylist: overrides.metricsDenylist ?? defaults.metricsDenylist,
 		excludeHost: overrides.excludeHost ?? defaults.excludeHost,
 		httpStatusGroup: overrides.httpStatusGroup ?? defaults.httpStatusGroup,
+		hostMetricsAllowlist:
+			overrides.hostMetricsAllowlist ?? defaults.hostMetricsAllowlist,
 	};
 }
 

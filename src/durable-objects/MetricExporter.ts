@@ -5,7 +5,7 @@ import {
 	isZoneLevelQuery,
 } from "../cloudflare/client";
 import { isPaidTierGraphQLQuery } from "../cloudflare/queries";
-import { partitionZonesByTier } from "../lib/filters";
+import { parseCommaSeparated, partitionZonesByTier } from "../lib/filters";
 import { createLogger, type Logger } from "../lib/logger";
 import type { MetricDefinition, MetricValue } from "../lib/metrics";
 import { getConfig, type ResolvedConfig } from "../lib/runtime-config";
@@ -19,6 +19,12 @@ import {
 } from "../lib/types";
 
 const STATE_KEY = "state";
+
+/**
+ * Maximum allowed hostnames in HOST_METRICS_ALLOWLIST.
+ * Limits GraphQL variable size and prevents cardinality explosion.
+ */
+const MAX_HOSTNAME_ALLOWLIST_SIZE = 50;
 
 type MetricExporterState = {
 	// Core identity
@@ -315,6 +321,7 @@ export class MetricExporter extends DurableObject<Env> {
 					client,
 					state,
 					timeRange,
+					config,
 					logger,
 				);
 			} else {
@@ -374,6 +381,7 @@ export class MetricExporter extends DurableObject<Env> {
 	 * @param client Cloudflare metrics client.
 	 * @param state Current exporter state.
 	 * @param timeRange Time range for metrics queries.
+	 * @param config Resolved runtime configuration.
 	 * @param logger Logger instance.
 	 * @returns Array of metric definitions.
 	 */
@@ -381,6 +389,7 @@ export class MetricExporter extends DurableObject<Env> {
 		client: ReturnType<typeof getCloudflareMetricsClient>,
 		state: MetricExporterState,
 		timeRange: TimeRange,
+		config: ResolvedConfig,
 		logger: Logger,
 	): Promise<MetricDefinition[]> {
 		const { queryName, accountId, accountName, zones, firewallRules } = state;
@@ -397,6 +406,35 @@ export class MetricExporter extends DurableObject<Env> {
 
 		// Zone-batched queries - fetch all zones in one GraphQL call
 		if (isZoneLevelQuery(queryName)) {
+			// Hostname metrics guardrails: parse allowlist once for both guard + query
+			let hostMetricsAllowlist: ReadonlySet<string> | undefined;
+			if (queryName === "hostname-http-metrics") {
+				const parsed = parseCommaSeparated(config.hostMetricsAllowlist);
+				// Normalize to lowercase per spec
+				const normalized = new Set([...parsed].map((h) => h.toLowerCase()));
+				if (normalized.size === 0) {
+					logger.debug("Hostname metrics disabled: empty allowlist");
+					return [];
+				}
+				if (normalized.size > MAX_HOSTNAME_ALLOWLIST_SIZE) {
+					logger.error("Hostname allowlist exceeds maximum size", {
+						size: normalized.size,
+						max: MAX_HOSTNAME_ALLOWLIST_SIZE,
+					});
+					return [];
+				}
+				// excludeHost strips host labels from all metrics in prometheus.ts,
+				// which would collapse distinct hostnames into duplicate gauge series
+				// (max-dedup keeps only the highest value, losing per-host granularity).
+				if (config.excludeHost) {
+					logger.warn(
+						"Hostname metrics disabled: excludeHost=true strips host labels",
+					);
+					return [];
+				}
+				hostMetricsAllowlist = normalized;
+			}
+
 			// Filter out free tier zones for paid-tier GraphQL queries
 			let zonesToQuery = zones;
 			if (isPaidTierGraphQLQuery(queryName)) {
@@ -424,6 +462,7 @@ export class MetricExporter extends DurableObject<Env> {
 				zonesToQuery,
 				firewallRules,
 				timeRange,
+				hostMetricsAllowlist,
 			);
 		}
 

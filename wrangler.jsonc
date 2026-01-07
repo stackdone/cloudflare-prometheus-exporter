@@ -39,7 +39,8 @@
 	},
 	"kv_namespaces": [
 		{
-			"binding": "CONFIG_KV"
+			"binding": "CONFIG_KV",
+			"id": ""
 		}
 	],
 	"ratelimits": [
@@ -62,6 +63,7 @@
 		"ACCOUNT_LIST_CACHE_TTL_SECONDS": 600,
 		"ZONE_LIST_CACHE_TTL_SECONDS": 1800,
 		"SSL_CERTS_CACHE_TTL_SECONDS": 1800,
+		"HOST_METRICS_ALLOWLIST": "",
 		"EXCLUDE_HOST": false,
 		"CF_HTTP_STATUS_GROUP": false,
 		"METRICS_PATH": "/metrics",

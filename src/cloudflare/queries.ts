@@ -21,6 +21,7 @@ export const MetricQueryNameSchema = z.enum([
 	"logpush-zone",
 	"origin-status-metrics",
 	"cache-miss-metrics",
+	"hostname-http-metrics",
 	// REST API
 	"ssl-certificates",
 	"lb-weight-metrics",
@@ -60,6 +61,7 @@ export const ZONE_LEVEL_QUERIES = [
 	"logpush-zone",
 	"origin-status-metrics",
 	"cache-miss-metrics",
+	"hostname-http-metrics",
 	"ssl-certificates",
 	"lb-weight-metrics",
 ] as const;
@@ -119,6 +121,7 @@ export const PAID_TIER_GRAPHQL_QUERIES = [
 	"logpush-zone",
 	"origin-status-metrics",
 	"cache-miss-metrics",
+	"hostname-http-metrics",
 ] as const;
 
 /**
