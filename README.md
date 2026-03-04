@@ -8,7 +8,7 @@ Export Cloudflare metrics to Prometheus. Built on Cloudflare Workers with Durabl
 
 ## Features
 
-- **70+ Prometheus metrics** - requests, bandwidth, threats, workers, load balancers, SSL certs, hostname-level analytics, and more
+- **80+ Prometheus metrics** - requests, bandwidth, threats, workers, load balancers, SSL certs, hostname-level analytics, network analytics, and more
 - **Cloudflare Workers** - serverless edge deployment
 - **Durable Objects** - stateful counter accumulation for proper Prometheus semantics
 - **Background refresh** - alarms fetch data every 60s; scrapes return cached data instantly
@@ -316,6 +316,52 @@ curl -X DELETE https://your-worker.workers.dev/config
 | `cloudflare_magic_transit_tunnel_failures` | gauge | account |
 | `cloudflare_magic_transit_edge_colo_count` | gauge | account |
 
+### Network Analytics Metrics
+
+Traffic volume metrics across Cloudflare's Network Analytics v2 datasets. All are account-level counters with low-cardinality labels. Datasets that don't apply to an account (e.g. no Magic Transit subscription) return no data.
+
+**Magic Transit**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cloudflare_network_analytics_magic_transit_bits_total` | counter | account, outcome, direction, ip_protocol, mitigation_system |
+| `cloudflare_network_analytics_magic_transit_packets_total` | counter | account, outcome, direction, ip_protocol, mitigation_system |
+
+**Magic Firewall**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cloudflare_network_analytics_magic_firewall_bits_total` | counter | account, outcome, direction, ip_protocol |
+| `cloudflare_network_analytics_magic_firewall_packets_total` | counter | account, outcome, direction, ip_protocol |
+
+**DDoS Defense (dosd)**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cloudflare_network_analytics_dosd_bits_total` | counter | account, outcome, direction, ip_protocol, attack_vector |
+| `cloudflare_network_analytics_dosd_packets_total` | counter | account, outcome, direction, ip_protocol, attack_vector |
+
+**Intrusion Detection (IDPS)**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cloudflare_network_analytics_idps_bits_total` | counter | account, outcome, direction, ip_protocol |
+| `cloudflare_network_analytics_idps_packets_total` | counter | account, outcome, direction, ip_protocol |
+
+**Advanced TCP Protection**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cloudflare_network_analytics_tcp_protection_bits_total` | counter | account, outcome, direction, ip_protocol |
+| `cloudflare_network_analytics_tcp_protection_packets_total` | counter | account, outcome, direction, ip_protocol |
+
+**Advanced DNS Protection**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cloudflare_network_analytics_dns_protection_bits_total` | counter | account, outcome, direction, ip_protocol |
+| `cloudflare_network_analytics_dns_protection_packets_total` | counter | account, outcome, direction, ip_protocol |
+
 ### Hostname Metrics
 
 Requires `HOST_METRICS_ALLOWLIST` to be set (max 50 hostnames). Disabled when `EXCLUDE_HOST=true`.
@@ -412,16 +458,16 @@ For mixed accounts (enterprise + free zones), only free zones are skipped—paid
 │   ▼            ▼      ▼            ▼      ▼            ▼                       │
 │ ┌─────┐    ┌─────┐  ┌─────┐    ┌─────┐  ┌─────┐    ┌─────┐                     │
 │ │Exprt│    │Exprt│  │Exprt│    │Exprt│  │Exprt│    │Exprt│                     │
-│ │(15) │ .. │(N)  │  │(15) │ .. │(N)  │  │(15) │ .. │(N)  │                     │
+│ │(16) │ .. │(N)  │  │(16) │ .. │(N)  │  │(16) │ .. │(N)  │                     │
 │ │acct │    │zone │  │acct │    │zone │  │acct │    │zone │                     │
 │ └─────┘    └─────┘  └─────┘    └─────┘  └─────┘    └─────┘                     │
 │                                                                                │
 │  MetricExporter DOs (per account):                                             │
-│  - Account-scoped (15): worker-totals, logpush-account, magic-transit,         │
-│    http-metrics, adaptive-metrics, edge-country-metrics, colo-metrics,         │
-│    colo-error-metrics, request-method-metrics, health-check-metrics,           │
-│    load-balancer-metrics, logpush-zone, origin-status-metrics,                 │
-│    cache-miss-metrics, hostname-http-metrics                                   │
+│  - Account-scoped (16): worker-totals, logpush-account, magic-transit,         │
+│    network-analytics, http-metrics, adaptive-metrics, edge-country-metrics,    │
+│    colo-metrics, colo-error-metrics, request-method-metrics,                   │
+│    health-check-metrics, load-balancer-metrics, logpush-zone,                  │
+│    origin-status-metrics, cache-miss-metrics, hostname-http-metrics            │
 │  - Zone-scoped (N per account, 1 per zone): ssl-certificates, lb-weight-metrics │
 │                                                                                │
 │  ┌─────────────────────────────────────────────────────────────────────────┐   │
@@ -469,7 +515,7 @@ For mixed accounts (enterprise + free zones), only free zones are skipped—paid
   ▼           ▼         ▼           ▼         ▼           ▼
 ┌─────┐   ┌─────┐    ┌─────┐   ┌─────┐    ┌─────┐   ┌─────┐
 │Exprt│...│Exprt│    │Exprt│...│Exprt│    │Exprt│...│Exprt│
-│15+N │   │     │    │15+N │   │     │    │15+N │   │     │
+│16+N │   │     │    │16+N │   │     │    │16+N │   │     │
 │     │   │     │    │     │   │     │    │     │   │     │
 │ ret │   │ ret │    │ ret │   │ ret │    │ ret │   │ ret │
 │cache│   │cache│    │cache│   │cache│    │cache│   │cache│
@@ -530,7 +576,7 @@ For mixed accounts (enterprise + free zones), only free zones are skipped—paid
 │                                                                        │
 │  3. Push context to MetricExporter DOs:                                │
 │     ┌────────────────────────────────────────────────────────────────┐ │
-│     │ Account-scoped (15 exporters):                                 │ │
+│     │ Account-scoped (16 exporters):                                 │ │
 │     │   exporter.updateZoneContext(accountId, accountName, zones)    │ │
 │     │                                                                │ │
 │     │ Zone-scoped (N exporters, 1 per zone):                         │ │
@@ -547,11 +593,12 @@ For mixed accounts (enterprise + free zones), only free zones are skipped—paid
 ┌────────────────────────────────────────────────────────────────────────┐
 │           MetricExporter.refresh() for account-scoped queries          │
 │                                                                        │
-│  Query Types (15 total):                                               │
-│  ├── ACCOUNT-LEVEL (single account per query, 3):                      │
+│  Query Types (16 total):                                               │
+│  ├── ACCOUNT-LEVEL (single account per query, 4):                      │
 │  │   ├── worker-totals                                                 │
 │  │   ├── logpush-account                                               │
-│  │   └── magic-transit                                                 │
+│  │   ├── magic-transit                                                 │
+│  │   └── network-analytics                                             │
 │  │                                                                     │
 │  └── ZONE-LEVEL (all zones batched in one query, 12):                  │
 │      ├── http-metrics                                                  │
