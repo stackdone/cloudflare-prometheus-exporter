@@ -1,0 +1,50 @@
+name: Package and publish Helm chart
+
+on:
+  release:
+    types: [published]
+  push:
+    branches:
+      - main
+    paths:
+      - helm/cloudflare-exporter/**
+      - .github/workflows/helm-publish.yml
+  workflow_dispatch:
+
+concurrency:
+  group: helm-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up Helm
+        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+
+      - name: Log in to GitHub Container Registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io \
+            --username ${{ github.actor }} \
+            --password-stdin
+
+      - name: Set chart version from release tag
+        if: github.event_name == 'release'
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#v}"
+          sed -i "s/^version:.*/version: ${VERSION}/" helm/cloudflare-exporter/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${TAG}\"/" helm/cloudflare-exporter/Chart.yaml
+
+      - name: Package Helm chart
+        run: helm package helm/cloudflare-exporter --destination /tmp/helm
+
+      - name: Push Helm chart to ghcr.io
+        run: helm push /tmp/helm/cloudflare-prometheus-exporter-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts
