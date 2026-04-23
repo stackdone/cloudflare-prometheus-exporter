@@ -175,3 +175,4 @@ dist
 # opencode
 .opencode/
 
+.DS_Store
