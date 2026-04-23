@@ -35,10 +35,15 @@ EXPOSE 8787
 RUN printf '#!/bin/sh\n\
     # Generate .dev.vars from environment variables\n\
     : > .dev.vars\n\
-    env | grep -E "^(CLOUDFLARE_|CF_)" | while read -r line; do\n\
+    env | grep -E "^(CLOUDFLARE_API_TOKEN=|CF_)" | while read -r line; do\n\
     echo "$line" >> .dev.vars\n\
     done\n\
+    # Wrangler requires non-empty KV namespace id even for local dev\n\
+    sed -i '"'"'s/"id": ""/"id": "local-placeholder"/g'"'"' wrangler.jsonc\n\
     exec wrangler dev --local --ip 0.0.0.0 "$@"\n' > /app/entrypoint.sh \
-    && chmod +x /app/entrypoint.sh
+    && chmod +x /app/entrypoint.sh \
+    && chown -R node:node /app
+
+USER node
 
 ENTRYPOINT ["/app/entrypoint.sh"]
