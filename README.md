@@ -56,6 +56,7 @@ Set in `wrangler.jsonc` or via `wrangler secret put`:
 | `HEALTH_CHECK_CACHE_TTL_SECONDS` | 10 | Health check cache TTL |
 | `EXCLUDE_HOST` | false | Exclude host labels from metrics |
 | `CF_HTTP_STATUS_GROUP` | false | Group HTTP status codes (2xx, 4xx, etc.) |
+| `PACKED_METRIC_STORAGE` | false | Enable compact storage and chunked output for zone metrics. Accepts the deprecated name `COLO_METRICS_PACKED_STORAGE`. |
 | `DISABLE_UI` | false | Disable landing page (returns 404) |
 | `DISABLE_CONFIG_API` | false | Disable config API endpoints (returns 404) |
 | `METRICS_DENYLIST` | - | Comma-separated list of metrics to exclude |
@@ -156,6 +157,8 @@ Override configuration at runtime without redeployment. Overrides persist in KV 
 | `metricsDenylist` | string | Comma-separated metrics to exclude |
 | `excludeHost` | boolean | Exclude host labels |
 | `httpStatusGroup` | boolean | Group HTTP status codes |
+| `packedMetricStorage` | boolean | Enable compact by-zone storage and chunked read output for supported high-cardinality queries, including edge-country, health-check, and hostname HTTP metrics |
+| `coloMetricsPackedStorage` | boolean | Deprecated alias for `packedMetricStorage` |
 | `hostMetricsAllowlist` | string | Comma-separated hostnames for hostname-level metrics |
 | `hostMetricsDelaySeconds` | number | Ingestion delay for hostname metrics (seconds) |
 
@@ -178,12 +181,28 @@ curl -X PUT https://your-worker.workers.dev/config/cfZones \
   -H "Content-Type: application/json" \
   -d '{"value": "zone-id-1,zone-id-2"}'
 
+# Enable compact packed metric storage for trial rollout
+curl -X PUT https://your-worker.workers.dev/config/packedMetricStorage \
+  -H "Content-Type: application/json" \
+  -d '{"value": true}'
+
 # Reset to env default
 curl -X DELETE https://your-worker.workers.dev/config/logLevel
 
 # Reset all overrides
 curl -X DELETE https://your-worker.workers.dev/config
 ```
+
+### Packed metric storage
+
+`packedMetricStorage` stores selected queries in compact typed state with named label columns instead of label-repeating rows, and streams the output in bounded chunks. Metric names and labels are unchanged.
+
+- Enabling packed storage migrates active and retained counters before adding the next window. Disabling deletes packed snapshots and starts a fresh unpacked counter generation on the next refresh.
+- The storage mode is resolved once per scrape and applied to every account, so a scrape never mixes packed and unpacked output for the same metric family.
+- Each counter series stores its own retry checkpoint. Replaying the same query window is idempotent. Series not seen for five refreshes are dropped; until then they are exported with their last value (a flat counter), whereas the unpacked path stops exporting a series the moment it is absent.
+- When `excludeHost` is set, packed rows that collapse onto the same remaining labels are summed, matching the unpacked serializer.
+- Packed queries keep their existing metric families. `colo-metrics` uses its reduced packed query, health checks use separate event and timing aliases, and hostname metrics preserve their four aliases and fixed one-minute window.
+- The 16 MiB serialized-state guard (`Chunked storage value exceeds the safe size limit`) still applies per query. Families with identical label columns share one copy, keeping high-cardinality multi-family queries such as `colo-metrics` within the guard.
 
 ## Available Metrics
 
@@ -315,7 +334,6 @@ curl -X DELETE https://your-worker.workers.dev/config
 
 | Metric | Type | Labels |
 |--------|------|--------|
-| `cloudflare_magic_transit_active_tunnels` | gauge | account, tunnel_name, site_name |
 | `cloudflare_magic_transit_healthy_tunnels` | gauge | account, tunnel_name, site_name |
 | `cloudflare_magic_transit_tunnel_failures` | gauge | account, tunnel_name, site_name |
 | `cloudflare_magic_transit_edge_colo_count` | gauge | account, tunnel_name, site_name |

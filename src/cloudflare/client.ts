@@ -2,6 +2,7 @@ import { Client, type CombinedError, fetchExchange } from "@urql/core";
 import Cloudflare from "cloudflare";
 import DataLoader from "dataloader";
 import z from "zod";
+import { ColumnarObservationSink } from "../lib/columnar-observations";
 import { GraphQLError } from "../lib/errors";
 import { findZoneName } from "../lib/filters";
 import {
@@ -11,6 +12,7 @@ import {
 	type LoggerConfig,
 } from "../lib/logger";
 import type { MetricDefinition } from "../lib/metrics";
+import type { ColumnarMetricSource } from "../lib/packed-columnar-metric";
 import { getEnvDefaults } from "../lib/runtime-config";
 import type {
 	Account,
@@ -25,6 +27,7 @@ import {
 	AdaptiveMetricsQuery,
 	CacheMissMetricsQuery,
 	ColoErrorMetricsQuery,
+	ColoMetricsPackedStorageQuery,
 	ColoMetricsQuery,
 	EdgeCountryMetricsQuery,
 	HealthCheckMetricsQuery,
@@ -732,12 +735,6 @@ export class CloudflareMetricsClient {
 			throw graphQLQueryError("magic-transit", result.error);
 		}
 
-		const activeTunnels: MetricDefinition = {
-			name: "cloudflare_magic_transit_active_tunnels",
-			help: "Active Magic Transit tunnels",
-			type: "gauge",
-			values: [],
-		};
 		const healthyTunnels: MetricDefinition = {
 			name: "cloudflare_magic_transit_healthy_tunnels",
 			help: "Healthy Magic Transit tunnels",
@@ -814,31 +811,25 @@ export class CloudflareMetricsClient {
 						site_name: siteName,
 					};
 
-					// Active: count where active=1 (uint8 boolean in CF schema)
-					const active = tunnelGroups
-						.filter((g) => (g.dimensions?.active ?? 0) === 1)
-						.reduce((sum, g) => sum + (g.count ?? 0), 0);
-					if (active > 0) activeTunnels.values.push({ labels, value: active });
-
-					// Healthy: resultStatus === "healthy"
+					// Healthy: resultStatus === "ok" (the API never returns "healthy")
 					const healthy = tunnelGroups
-						.filter((g) => g.dimensions?.resultStatus === "healthy")
+						.filter((g) => g.dimensions?.resultStatus === "ok")
 						.reduce((sum, g) => sum + (g.count ?? 0), 0);
 					if (healthy > 0)
 						healthyTunnels.values.push({ labels, value: healthy });
 
-					// Failures: resultStatus !== "healthy"
+					// Failures: everything that isn't "ok"
 					const failures = tunnelGroups
-						.filter((g) => g.dimensions?.resultStatus !== "healthy")
+						.filter((g) => g.dimensions?.resultStatus !== "ok")
 						.reduce((sum, g) => sum + (g.count ?? 0), 0);
 					if (failures > 0)
 						tunnelFailures.values.push({ labels, value: failures });
 
-					// Failures by status: group non-healthy results by resultStatus
+					// Failures by status: group non-"ok" results by resultStatus
 					const byStatus = new Map<string, number>();
 					for (const g of tunnelGroups) {
 						const status = g.dimensions?.resultStatus ?? "";
-						if (status === "healthy" || status === "") continue;
+						if (status === "ok" || status === "") continue;
 						byStatus.set(status, (byStatus.get(status) ?? 0) + (g.count ?? 0));
 					}
 					for (const [status, count] of byStatus) {
@@ -886,7 +877,6 @@ export class CloudflareMetricsClient {
 		}
 
 		return [
-			activeTunnels,
 			healthyTunnels,
 			tunnelFailures,
 			edgeColoCount,
@@ -1499,6 +1489,8 @@ export class CloudflareMetricsClient {
 	 * @param timeRange Shared time range for query alignment.
 	 * @param hostMetricsAllowlist Allowed hostnames for hostname-http-metrics query.
 	 * @param hostMetricsDelaySeconds Ingestion delay override for hostname metrics.
+	 * @param httpStatusGroup Whether to group HTTP response statuses by class.
+	 * @param packedMetricStorage Whether packed storage is enabled, allowing reduced query selections.
 	 * @returns Promise of metric definitions for the zones.
 	 * @throws {Error} When unknown query type provided.
 	 */
@@ -1510,6 +1502,9 @@ export class CloudflareMetricsClient {
 		timeRange: TimeRange,
 		hostMetricsAllowlist?: ReadonlySet<string>,
 		hostMetricsDelaySeconds?: number,
+		httpStatusGroup = false,
+		packedMetricStorage = false,
+		observationSink?: ColumnarObservationSink,
 	): Promise<MetricDefinition[]> {
 		this.logger.info("Fetching zone metrics", {
 			query,
@@ -1523,27 +1518,81 @@ export class CloudflareMetricsClient {
 					zones,
 					firewallMap,
 					timeRange,
+					httpStatusGroup,
+					observationSink,
 				);
 			case "adaptive-metrics":
-				return this.getAdaptiveMetrics(zoneIds, zones, timeRange);
+				return this.getAdaptiveMetrics(
+					zoneIds,
+					zones,
+					timeRange,
+					observationSink,
+				);
 			case "edge-country-metrics":
-				return this.getEdgeCountryMetrics(zoneIds, zones, timeRange);
+				return this.getEdgeCountryMetrics(
+					zoneIds,
+					zones,
+					timeRange,
+					observationSink,
+				);
 			case "colo-metrics":
-				return this.getColoMetrics(zoneIds, zones, timeRange);
+				return this.getColoMetrics(
+					zoneIds,
+					zones,
+					timeRange,
+					packedMetricStorage,
+					observationSink,
+				);
 			case "colo-error-metrics":
-				return this.getColoErrorMetrics(zoneIds, zones, timeRange);
+				return this.getColoErrorMetrics(
+					zoneIds,
+					zones,
+					timeRange,
+					observationSink,
+				);
 			case "request-method-metrics":
-				return this.getRequestMethodMetrics(zoneIds, zones, timeRange);
+				return this.getRequestMethodMetrics(
+					zoneIds,
+					zones,
+					timeRange,
+					observationSink,
+				);
 			case "health-check-metrics":
-				return this.getHealthCheckMetrics(zoneIds, zones, timeRange);
+				return this.getHealthCheckMetrics(
+					zoneIds,
+					zones,
+					timeRange,
+					observationSink,
+				);
 			case "load-balancer-metrics":
-				return this.getLoadBalancerMetrics(zoneIds, zones, timeRange);
+				return this.getLoadBalancerMetrics(
+					zoneIds,
+					zones,
+					timeRange,
+					packedMetricStorage,
+					observationSink,
+				);
 			case "logpush-zone":
-				return this.getLogpushZoneMetrics(zoneIds, zones, timeRange);
+				return this.getLogpushZoneMetrics(
+					zoneIds,
+					zones,
+					timeRange,
+					observationSink,
+				);
 			case "origin-status-metrics":
-				return this.getOriginStatusMetrics(zoneIds, zones, timeRange);
+				return this.getOriginStatusMetrics(
+					zoneIds,
+					zones,
+					timeRange,
+					observationSink,
+				);
 			case "cache-miss-metrics":
-				return this.getCacheMissMetrics(zoneIds, zones, timeRange);
+				return this.getCacheMissMetrics(
+					zoneIds,
+					zones,
+					timeRange,
+					observationSink,
+				);
 			case "hostname-http-metrics":
 				return this.getHostnameHttpMetrics(
 					zoneIds,
@@ -1551,16 +1600,43 @@ export class CloudflareMetricsClient {
 					timeRange,
 					hostMetricsAllowlist,
 					hostMetricsDelaySeconds,
+					observationSink,
 				);
 			case "ssl-certificates":
-				return this.getSSLCertificateMetrics(zones);
+				return this.getSSLCertificateMetrics(zones, observationSink);
 			case "lb-weight-metrics":
-				return this.getLbWeightMetrics(zones);
+				return this.getLbWeightMetrics(zones, observationSink);
 			default: {
 				const _exhaustive: never = query;
 				throw new Error(`Unknown zone metric query: ${_exhaustive}`);
 			}
 		}
+	}
+
+	async getPackedZoneMetrics(
+		query: ZoneLevelQuery,
+		zoneIds: string[],
+		zones: Zone[],
+		firewallRules: Record<string, string>,
+		timeRange: TimeRange,
+		hostMetricsAllowlist?: ReadonlySet<string>,
+		hostMetricsDelaySeconds?: number,
+		httpStatusGroup = false,
+	): Promise<ColumnarMetricSource[]> {
+		const observationSink = new ColumnarObservationSink();
+		await this.getZoneMetrics(
+			query,
+			zoneIds,
+			zones,
+			firewallRules,
+			timeRange,
+			hostMetricsAllowlist,
+			hostMetricsDelaySeconds,
+			httpStatusGroup,
+			true,
+			observationSink,
+		);
+		return observationSink.finish();
 	}
 
 	/**
@@ -1571,6 +1647,7 @@ export class CloudflareMetricsClient {
 	 * @param zones Zone metadata for label mapping.
 	 * @param firewallRules Map of rule IDs to names for labels.
 	 * @param timeRange Time range for the query.
+	 * @param httpStatusGroup Whether to group HTTP response statuses by class.
 	 * @returns HTTP metrics.
 	 * @throws {Error} When GraphQL query fails.
 	 */
@@ -1579,6 +1656,8 @@ export class CloudflareMetricsClient {
 		zones: Zone[],
 		firewallRules: Map<string, string>,
 		timeRange: TimeRange,
+		httpStatusGroup: boolean,
+		observationSink?: ColumnarObservationSink,
 	): Promise<MetricDefinition[]> {
 		const queryVars = {
 			zoneIDs: zoneIds,
@@ -1644,7 +1723,9 @@ export class CloudflareMetricsClient {
 		};
 		const requestsStatus: MetricDefinition = {
 			name: "cloudflare_zone_requests_status_total",
-			help: "Requests by status code group",
+			help: httpStatusGroup
+				? "Requests by status code group"
+				: "Requests by status code",
 			type: "counter",
 			values: [],
 		};
@@ -1766,6 +1847,32 @@ export class CloudflareMetricsClient {
 			type: "gauge",
 			values: [],
 		};
+		observationSink?.capture([
+			requestsTotal,
+			requestsCached,
+			requestsSsl,
+			requestsContentType,
+			requestsCountry,
+			requestsStatus,
+			requestsBrowser,
+			requestsIpClass,
+			requestsSslProtocol,
+			requestsHttpVersion,
+			bandwidthTotal,
+			bandwidthCached,
+			bandwidthSsl,
+			bandwidthContentType,
+			bandwidthCountry,
+			threatsTotal,
+			threatsCountry,
+			threatsType,
+			pageviewsTotal,
+			uniquesTotal,
+			firewallEvents,
+			botsDetected,
+			botByCountry,
+			cacheHitRatio,
+		]);
 
 		for (const zoneData of result.data?.viewer?.zones ?? []) {
 			const zoneName = findZoneName(zoneData.zoneTag, zones);
@@ -1860,12 +1967,14 @@ export class CloudflareMetricsClient {
 				}
 			}
 
-			// Status code breakdown (with grouping)
+			// Status code breakdown
 			const statusGroups: Record<string, number> = {};
 			for (const s of sum?.responseStatusMap ?? []) {
-				const groupedStatus = groupStatusCode(s.edgeResponseStatus ?? 0);
-				statusGroups[groupedStatus] =
-					(statusGroups[groupedStatus] ?? 0) + (s.requests ?? 0);
+				const statusCode = s.edgeResponseStatus ?? 0;
+				const status = httpStatusGroup
+					? groupStatusCode(statusCode)
+					: String(statusCode);
+				statusGroups[status] = (statusGroups[status] ?? 0) + (s.requests ?? 0);
 			}
 			for (const [status, count] of Object.entries(statusGroups)) {
 				requestsStatus.values.push({
@@ -2018,6 +2127,7 @@ export class CloudflareMetricsClient {
 		zoneIds: string[],
 		zones: Zone[],
 		timeRange: TimeRange,
+		observationSink?: ColumnarObservationSink,
 	): Promise<MetricDefinition[]> {
 		const result = await this.gql.query(AdaptiveMetricsQuery, {
 			zoneIDs: zoneIds,
@@ -2054,6 +2164,12 @@ export class CloudflareMetricsClient {
 			type: "gauge",
 			values: [],
 		};
+		observationSink?.capture([
+			error4xx,
+			error5xx,
+			originDuration,
+			originErrorRate,
+		]);
 
 		// Track totals for error rate calculation
 		const zoneStats: Record<string, { errors4xx: number; errors5xx: number }> =
@@ -2124,6 +2240,7 @@ export class CloudflareMetricsClient {
 		zoneIds: string[],
 		zones: Zone[],
 		timeRange: TimeRange,
+		observationSink?: ColumnarObservationSink,
 	): Promise<MetricDefinition[]> {
 		const result = await this.gql.query(EdgeCountryMetricsQuery, {
 			zoneIDs: zoneIds,
@@ -2149,6 +2266,7 @@ export class CloudflareMetricsClient {
 			type: "gauge",
 			values: [],
 		};
+		observationSink?.capture([statusCountryHost, edgeErrorRate]);
 
 		// Aggregate for error rate calculation
 		const zoneStats: Record<string, { total: number; errors: number }> = {};
@@ -2212,13 +2330,18 @@ export class CloudflareMetricsClient {
 		zoneIds: string[],
 		zones: Zone[],
 		timeRange: TimeRange,
+		packedMetricStorage = false,
+		observationSink?: ColumnarObservationSink,
 	): Promise<MetricDefinition[]> {
-		const result = await this.gql.query(ColoMetricsQuery, {
-			zoneIDs: zoneIds,
-			mintime: timeRange.mintime,
-			maxtime: timeRange.maxtime,
-			limit: this.config.queryLimit,
-		});
+		const result = await this.gql.query(
+			packedMetricStorage ? ColoMetricsPackedStorageQuery : ColoMetricsQuery,
+			{
+				zoneIDs: zoneIds,
+				mintime: timeRange.mintime,
+				maxtime: timeRange.maxtime,
+				limit: this.config.queryLimit,
+			},
+		);
 
 		if (result.error) {
 			throw graphQLQueryError("colo-metrics", result.error);
@@ -2242,6 +2365,7 @@ export class CloudflareMetricsClient {
 			type: "counter",
 			values: [],
 		};
+		observationSink?.capture([visits, responseBytes, requestsTotal]);
 
 		for (const zoneData of result.data?.viewer?.zones ?? []) {
 			const zoneName = findZoneName(zoneData.zoneTag, zones);
@@ -2288,6 +2412,7 @@ export class CloudflareMetricsClient {
 		zoneIds: string[],
 		zones: Zone[],
 		timeRange: TimeRange,
+		observationSink?: ColumnarObservationSink,
 	): Promise<MetricDefinition[]> {
 		const result = await this.gql.query(ColoErrorMetricsQuery, {
 			zoneIDs: zoneIds,
@@ -2318,6 +2443,7 @@ export class CloudflareMetricsClient {
 			type: "counter",
 			values: [],
 		};
+		observationSink?.capture([visitsError, responseBytesError, requestsError]);
 
 		for (const zoneData of result.data?.viewer?.zones ?? []) {
 			const zoneName = findZoneName(zoneData.zoneTag, zones);
@@ -2365,6 +2491,7 @@ export class CloudflareMetricsClient {
 		zoneIds: string[],
 		zones: Zone[],
 		timeRange: TimeRange,
+		observationSink?: ColumnarObservationSink,
 	): Promise<MetricDefinition[]> {
 		const result = await this.gql.query(RequestMethodMetricsQuery, {
 			zoneIDs: zoneIds,
@@ -2383,6 +2510,7 @@ export class CloudflareMetricsClient {
 			type: "counter",
 			values: [],
 		};
+		observationSink?.capture([methodCount]);
 
 		for (const zoneData of result.data?.viewer?.zones ?? []) {
 			const zoneName = findZoneName(zoneData.zoneTag, zones);
@@ -2416,6 +2544,7 @@ export class CloudflareMetricsClient {
 		zoneIds: string[],
 		zones: Zone[],
 		timeRange: TimeRange,
+		observationSink?: ColumnarObservationSink,
 	): Promise<MetricDefinition[]> {
 		const result = await this.gql.query(HealthCheckMetricsQuery, {
 			zoneIDs: zoneIds,
@@ -2468,6 +2597,14 @@ export class CloudflareMetricsClient {
 			type: "gauge",
 			values: [],
 		};
+		observationSink?.capture([
+			eventsOrigin,
+			eventsAvg,
+			healthCheckRtt,
+			healthCheckTtfb,
+			healthCheckTcpConn,
+			healthCheckTlsHandshake,
+		]);
 
 		for (const zoneData of result.data?.viewer?.zones ?? []) {
 			const zoneName = findZoneName(zoneData.zoneTag, zones);
@@ -2566,6 +2703,7 @@ export class CloudflareMetricsClient {
 		anchor: TimeRange,
 		allowlist: ReadonlySet<string> | undefined,
 		hostMetricsDelaySeconds?: number,
+		observationSink?: ColumnarObservationSink,
 	): Promise<MetricDefinition[]> {
 		if (!allowlist || allowlist.size === 0) {
 			this.logger.debug("Hostname metrics skipped: empty allowlist");
@@ -2665,6 +2803,17 @@ export class CloudflareMetricsClient {
 			type: "gauge",
 			values: [],
 		};
+		observationSink?.capture([
+			hostnameRequests,
+			hostnameStatus,
+			hostnameCacheStatus,
+			hostnameEdgeTtfb,
+			hostnameEdgeTtfbP50,
+			hostnameEdgeTtfbP95,
+			hostnameOriginDuration,
+			hostnameOriginDurationP50,
+			hostnameOriginDurationP95,
+		]);
 
 		for (const zoneData of result.data?.viewer?.zones ?? []) {
 			const zoneName = findZoneName(zoneData.zoneTag, zones);
@@ -2838,12 +2987,15 @@ export class CloudflareMetricsClient {
 		zoneIds: string[],
 		zones: Zone[],
 		timeRange: TimeRange,
+		packedMetricStorage: boolean,
+		observationSink?: ColumnarObservationSink,
 	): Promise<MetricDefinition[]> {
 		const result = await this.gql.query(LoadBalancerMetricsQuery, {
 			zoneIDs: zoneIds,
 			mintime: timeRange.mintime,
 			maxtime: timeRange.maxtime,
 			limit: this.config.queryLimit,
+			packed: packedMetricStorage,
 		});
 
 		if (result.error) {
@@ -2884,6 +3036,13 @@ export class CloudflareMetricsClient {
 			type: "gauge",
 			values: [],
 		};
+		observationSink?.capture([
+			poolHealth,
+			poolRequests,
+			poolRtt,
+			steeringPolicyInfo,
+			originsSelectedCount,
+		]);
 
 		// Track seen policies to dedupe info metric
 		const seenPolicies = new Set<string>();
@@ -2948,6 +3107,80 @@ export class CloudflareMetricsClient {
 				}
 			}
 
+			for (const group of zoneData.poolRequests ?? []) {
+				const dim = group.dimensions;
+				if (group.count != null && group.count > 0) {
+					poolRequests.values.push({
+						labels: {
+							zone: zoneName,
+							lb_name: dim?.lbName ?? "",
+							pool_name: dim?.selectedPoolName ?? "",
+							origin_name: dim?.selectedOriginName ?? "",
+						},
+						value: group.count,
+					});
+				}
+			}
+
+			for (const group of zoneData.poolRtt ?? []) {
+				const dim = group.dimensions;
+				if (
+					group.count != null &&
+					group.count > 0 &&
+					dim?.selectedPoolAvgRttMs != null &&
+					dim.selectedPoolAvgRttMs > 0
+				) {
+					poolRtt.values.push({
+						labels: {
+							zone: zoneName,
+							lb_name: dim.lbName ?? "",
+							pool_name: dim.selectedPoolName ?? "",
+						},
+						value: dim.selectedPoolAvgRttMs / 1000,
+					});
+				}
+			}
+
+			for (const group of zoneData.originsSelected ?? []) {
+				const dim = group.dimensions;
+				if (
+					group.count != null &&
+					group.count > 0 &&
+					dim?.numberOriginsSelected != null
+				) {
+					originsSelectedCount.values.push({
+						labels: {
+							zone: zoneName,
+							lb_name: dim.lbName ?? "",
+							pool_name: dim.selectedPoolName ?? "",
+						},
+						value: dim.numberOriginsSelected,
+					});
+				}
+			}
+
+			for (const group of zoneData.steeringPolicies ?? []) {
+				const dim = group.dimensions;
+				const lbName = dim?.lbName ?? "";
+				const policyKey = `${zoneName}\x00${lbName}`;
+				if (
+					group.count != null &&
+					group.count > 0 &&
+					dim?.steeringPolicy &&
+					!seenPolicies.has(policyKey)
+				) {
+					seenPolicies.add(policyKey);
+					steeringPolicyInfo.values.push({
+						labels: {
+							zone: zoneName,
+							lb_name: lbName,
+							policy: dim.steeringPolicy,
+						},
+						value: 1,
+					});
+				}
+			}
+
 			// Pool health from adaptive
 			for (const lb of zoneData.loadBalancingRequestsAdaptive ?? []) {
 				for (const pool of lb.pools ?? []) {
@@ -2985,6 +3218,7 @@ export class CloudflareMetricsClient {
 		zoneIds: string[],
 		zones: Zone[],
 		timeRange: TimeRange,
+		observationSink?: ColumnarObservationSink,
 	): Promise<MetricDefinition[]> {
 		const result = await this.gql.query(LogpushZoneMetricsQuery, {
 			zoneIDs: zoneIds,
@@ -3003,6 +3237,7 @@ export class CloudflareMetricsClient {
 			type: "counter",
 			values: [],
 		};
+		observationSink?.capture([failedJobs]);
 
 		for (const zoneData of result.data?.viewer?.zones ?? []) {
 			const zoneName = findZoneName(zoneData.zoneTag, zones);
@@ -3038,6 +3273,7 @@ export class CloudflareMetricsClient {
 		zoneIds: string[],
 		zones: Zone[],
 		timeRange: TimeRange,
+		observationSink?: ColumnarObservationSink,
 	): Promise<MetricDefinition[]> {
 		const result = await this.gql.query(OriginStatusMetricsQuery, {
 			zoneIDs: zoneIds,
@@ -3056,6 +3292,7 @@ export class CloudflareMetricsClient {
 			type: "counter",
 			values: [],
 		};
+		observationSink?.capture([originStatusCountryHost]);
 
 		for (const zoneData of result.data?.viewer?.zones ?? []) {
 			const zoneName = findZoneName(zoneData.zoneTag, zones);
@@ -3095,6 +3332,7 @@ export class CloudflareMetricsClient {
 		zoneIds: string[],
 		zones: Zone[],
 		timeRange: TimeRange,
+		observationSink?: ColumnarObservationSink,
 	): Promise<MetricDefinition[]> {
 		const result = await this.gql.query(CacheMissMetricsQuery, {
 			zoneIDs: zoneIds,
@@ -3117,6 +3355,7 @@ export class CloudflareMetricsClient {
 			type: "gauge",
 			values: [],
 		};
+		observationSink?.capture([cacheMissDuration]);
 
 		for (const zoneData of result.data?.viewer?.zones ?? []) {
 			const zoneName = findZoneName(zoneData.zoneTag, zones);
@@ -3225,13 +3464,17 @@ export class CloudflareMetricsClient {
 	 * @param zones Zone metadata.
 	 * @returns LB weight metrics.
 	 */
-	private async getLbWeightMetrics(zones: Zone[]): Promise<MetricDefinition[]> {
+	private async getLbWeightMetrics(
+		zones: Zone[],
+		observationSink?: ColumnarObservationSink,
+	): Promise<MetricDefinition[]> {
 		const originWeight: MetricDefinition = {
 			name: "cloudflare_zone_lb_origin_weight",
 			help: "Load balancer origin weight (0-1 normalized)",
 			type: "gauge",
 			values: [],
 		};
+		observationSink?.capture([originWeight]);
 
 		for (const zone of zones) {
 			const lbConfigs = await this.getLoadBalancerConfigs(
@@ -3269,6 +3512,7 @@ export class CloudflareMetricsClient {
 	 */
 	private async getSSLCertificateMetrics(
 		zones: Zone[],
+		observationSink?: ColumnarObservationSink,
 	): Promise<MetricDefinition[]> {
 		const certStatus: MetricDefinition = {
 			name: "cloudflare_zone_certificate_validation_status",
@@ -3276,6 +3520,7 @@ export class CloudflareMetricsClient {
 			type: "gauge",
 			values: [],
 		};
+		observationSink?.capture([certStatus]);
 
 		// Fetch all certs in parallel via DataLoader batching
 		const certsResults = await Promise.all(
